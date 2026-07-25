@@ -26,11 +26,11 @@ from .base import HacsBase
 from .const import DOMAIN, HACS_SYSTEM_ID, MINIMUM_HA_VERSION
 from .data_client import HacsDataClient
 from .enums import HacsDisabledReason, HacsStage, LovelaceMode
-from .frontend import async_register_frontend
 from .utils.data import HacsData
 from .utils.queue_manager import QueueManager
 from .utils.store import STORE_CACHE_KEY
 from .utils.version import version_left_higher_or_equal_then_right
+from .vision import async_setup_vision, async_unload_vision
 from .websocket import async_register_websocket_commands
 
 PLATFORMS = [Platform.SWITCH, Platform.UPDATE]
@@ -142,7 +142,8 @@ async def _async_initialize_integration(
         hacs.set_active_categories()
 
         async_register_websocket_commands(hass)
-        await async_register_frontend(hass, hacs)
+        # Merged: HACS Vision is now the HACS panel / API (replaces native frontend)
+        await async_setup_vision(hass, hacs, config_entry)
 
         await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
@@ -214,6 +215,12 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
             async_remove_panel(hass, "hacs")
     except AttributeError:
         pass
+
+    # Merged: tear down HACS Vision features
+    try:
+        await async_unload_vision(hass)
+    except Exception as err:  # noqa: BLE001
+        hacs.log.warning("Error during HACS Vision unload: %s", err)
 
     unload_ok = await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
 
