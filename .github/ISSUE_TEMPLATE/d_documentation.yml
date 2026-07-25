@@ -1,0 +1,22 @@
+---
+name: "Documentation"
+description: You use this when something is wrong with the documentation.
+labels: "issue:documentation"
+body:
+- type: markdown
+  attributes:
+    value: |
+      Learn how to submit an issue here https://hacs.xyz/docs/help/issues/
+      Before you open a new issue, search through the existing issues to see if others have had the same problem.
+
+      The issue template is not a suggestion, fill out everything that is asked.
+- type: textarea
+  attributes:
+    label: Describe the issue
+    placeholder: "A clear and concise description of what the issue is."
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Screenshots
+    placeholder: "Here you paste screenshots to showcase the issue."

@@ -1,0 +1,84 @@
+"""Queue tests."""
+from unittest.mock import AsyncMock, patch
+
+from homeassistant.core import HomeAssistant
+import pytest
+
+from custom_components.hacs.const import VERSION_STORAGE
+from custom_components.hacs.exceptions import HacsException
+from custom_components.hacs.utils.store import (
+    STORE_CACHE_KEY,
+    async_load_from_store,
+    async_remove_store,
+    async_save_to_store,
+    get_store_for_key,
+)
+
+
+async def test_store_load(hass: HomeAssistant) -> None:
+    """Test the store load."""
+    store = get_store_for_key(hass, "test")
+
+    with patch(
+        "custom_components.hacs.utils.store.json_util.load_json",
+        return_value={"version": VERSION_STORAGE, "data": {"test": "test"}},
+    ):
+        assert store.load() == {"test": "test"}
+        assert await async_load_from_store(hass, "test") == {"test": "test"}
+
+    with patch("custom_components.hacs.utils.store.json_util.load_json", return_value={}):
+        assert store.load() is None
+
+    with pytest.raises(HacsException):
+        with patch(
+            "custom_components.hacs.utils.store.json_util.load_json", side_effect=OSError("No file"),
+        ):
+            assert store.load() == {"test": "test"}
+
+
+async def test_store_remove(hass: HomeAssistant) -> None:
+    """Test the store remove."""
+    with patch(
+        "custom_components.hacs.utils.store.HACSStore.async_remove", return_value=AsyncMock(),
+    ) as async_remove_mock:
+        await async_remove_store(hass, "test")
+        assert not async_remove_mock.called
+
+        await async_remove_store(hass, "test/test")
+        assert async_remove_mock.called
+
+
+async def test_store_store(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    """Test the store store."""
+    with patch(
+        "custom_components.hacs.utils.store.HACSStore.async_save", return_value=AsyncMock(),
+    ) as async_save_mock, patch(
+        "custom_components.hacs.utils.store.json_util.load_json",
+        return_value={"version": VERSION_STORAGE, "data": {}},
+    ):
+        await async_save_to_store(hass, "test", {})
+        assert not async_save_mock.called
+        assert (
+            "<HACSStore async_save_to_store> Did not store data for 'hacs.test'. Content did not change"
+            in caplog.text
+        )
+
+        await async_save_to_store(hass, "test", {"test": "test"})
+        assert async_save_mock.call_count == 1
+
+
+async def test_store_instance_cached_per_key(hass: HomeAssistant) -> None:
+    """Repeated calls for the same key must return the same Store instance.
+
+    Store.async_delay_save() debounces via instance state, so callers that
+    schedule delayed writes need the same Store object each time.
+    """
+    assert get_store_for_key(hass, "test") is get_store_for_key(hass, "test")
+    assert get_store_for_key(hass, "test") is not get_store_for_key(hass, "other")
+
+
+async def test_store_cache_cleared_on_unload(hass: HomeAssistant) -> None:
+    """Clearing STORE_CACHE_KEY (as async_unload_entry does) drops cached Stores."""
+    first = get_store_for_key(hass, "test")
+    hass.data.pop(STORE_CACHE_KEY, None)
+    assert get_store_for_key(hass, "test") is not first
