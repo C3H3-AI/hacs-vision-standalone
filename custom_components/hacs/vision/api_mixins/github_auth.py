@@ -40,7 +40,16 @@ class GitHubAuthMixin:
         return None
 
     async def _get_active_github_token(self) -> str | None:
-        """Get GitHub token from Vision's own storage only."""
+        """Get the active GitHub token.
+
+        Merged account model (2026-07-26): Vision no longer requires a separate
+        GitHub login. It reuses the token HACS itself already obtained via the
+        GitHub device flow, so the user authenticates exactly once (in HACS).
+        Vision's own stored token remains only as a fallback for legacy setups.
+        """
+        hacs_token = self._get_hacs_token()
+        if hacs_token:
+            return hacs_token
         return await self._get_vision_github_token()
 
     # ── Generic GitHub API caller ───────────────────────
@@ -115,7 +124,14 @@ class GitHubAuthMixin:
                 user = await resp.json()
         except Exception as e:
             return _server_error()
-        return web.json_response({"login": user.get("login"), "avatar_url": user.get("avatar_url")})
+        # `managed_by` tells the frontend this session is sourced from HACS's
+        # own auth (no separate Vision login required) — enables the streamlined
+        # account UI without touching the minified frontend bundle.
+        return web.json_response({
+            "login": user.get("login"),
+            "avatar_url": user.get("avatar_url"),
+            "managed_by": "hacs",
+        })
 
     async def _github_import_token(self) -> web.Response:
         """Import GitHub token from HACS and save to Vision's own storage."""

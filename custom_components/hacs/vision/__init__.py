@@ -2,9 +2,9 @@
 
 After the merge this module is no longer a standalone integration. It is
 initialised from HACS' own ``async_startup`` via :func:`async_setup_vision`,
-which registers the Vision panel (at the ``hacs`` sidebar URL, replacing the
-native HACS panel), the REST API views, the brand-icon view, the sidebar
-badge, the auto-update manager and the HA services.
+which registers the Vision panel (at its own ``hacs-vision`` sidebar URL, the
+native HACS panel remains available separately), the REST API views, the
+brand-icon view, the sidebar badge, the auto-update manager and the HA services.
 """
 from __future__ import annotations
 import logging
@@ -23,10 +23,16 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
-# Merged: the Vision panel *is* the HACS sidebar panel now.
-URL_PATH = "hacs"
+# Merged: Vision panel lives on its own standalone URL ("hacs-vision") rather than
+# the native `hacs` panel URL, so it stays compatible with HA's auth injection on
+# mobile/incognito clients (occupying `hacs` caused blank panels there).
+URL_PATH = "hacs-vision"
 PANEL_TITLE = "HACS"
 STORE_KEY = "hacs_vision"
+# Merged integration domain — used for service registration. The old "hacs_vision"
+# domain no longer exists after the fork-merge, so services are registered under
+# `hacs` to avoid HA failing to load a non-existent services.yaml on every startup.
+SERVICE_DOMAIN = "hacs"
 
 
 async def async_setup_vision(
@@ -225,43 +231,6 @@ async def _register_ws_handler(hass: HomeAssistant) -> None:
     _LOGGER.debug("Registered WS handler: hacs_vision/updates")
 
 
-async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> None:
-    """Add sidebar-badge.js as a Lovelace module resource."""
-    try:
-        await hass.services.async_call(
-            "lovelace", "set_resource",
-            {"res_type": "module", "url": url, "create": True},
-            blocking=True,
-        )
-        _LOGGER.info("Registered sidebar badge via lovelace service")
-        return
-    except Exception:
-        pass
-
-    try:
-        from homeassistant.helpers.storage import Store
-        import uuid
-
-        store = Store(hass, "lovelace_resources")
-        data = await store.async_load() or {}
-        items = data.setdefault("data", {}).setdefault("items", [])
-
-        for item in items:
-            if item.get("url") == url:
-                _LOGGER.debug("Sidebar badge already registered")
-                return
-
-        items.append({
-            "id": uuid.uuid4().hex[:16],
-            "url": url,
-            "type": "module",
-        })
-        await store.async_save(data)
-        _LOGGER.info("Registered sidebar badge resource via storage")
-    except Exception as exc:
-        _LOGGER.debug("Lovelace resource registration failed (non-critical): %s", exc)
-
-
 def _register_services(hass: HomeAssistant, operator) -> None:
     """Register HA services for HACS Vision."""
     from .entity_ref_finder import EntityRefFinder
@@ -368,22 +337,22 @@ def _register_services(hass: HomeAssistant, operator) -> None:
         except Exception as e:
             _LOGGER.error("replace_entity_refs error: %s", e, exc_info=True)
 
-    hass.services.async_register(DOMAIN, "refresh", handle_refresh)
+    hass.services.async_register(SERVICE_DOMAIN, "refresh", handle_refresh)
     hass.services.async_register(
-        DOMAIN, "install_repository", handle_install_repository,
+        SERVICE_DOMAIN, "install_repository", handle_install_repository,
         schema=vol.Schema({
             vol.Required("repository"): cv.string,
             vol.Optional("category", default="integration"): cv.string,
         }),
     )
     hass.services.async_register(
-        DOMAIN, "find_entity_refs", handle_find_entity_refs,
+        SERVICE_DOMAIN, "find_entity_refs", handle_find_entity_refs,
         schema=vol.Schema({
             vol.Required("entity_id"): cv.string,
         }),
     )
     hass.services.async_register(
-        DOMAIN, "replace_entity_refs", handle_replace_entity_refs,
+        SERVICE_DOMAIN, "replace_entity_refs", handle_replace_entity_refs,
         schema=vol.Schema({
             vol.Required("old_id"): cv.string,
             vol.Required("new_id"): cv.string,
@@ -413,10 +382,10 @@ def _register_services(hass: HomeAssistant, operator) -> None:
         if mgr:
             mgr.reload_settings()
 
-    hass.services.async_register(DOMAIN, "auto_update_start", handle_auto_update_start)
-    hass.services.async_register(DOMAIN, "auto_update_stop", handle_auto_update_stop)
-    hass.services.async_register(DOMAIN, "auto_update_trigger", handle_auto_update_trigger)
-    hass.services.async_register(DOMAIN, "auto_update_reload_settings", handle_auto_update_reload_settings)
+    hass.services.async_register(SERVICE_DOMAIN, "auto_update_start", handle_auto_update_start)
+    hass.services.async_register(SERVICE_DOMAIN, "auto_update_stop", handle_auto_update_stop)
+    hass.services.async_register(SERVICE_DOMAIN, "auto_update_trigger", handle_auto_update_trigger)
+    hass.services.async_register(SERVICE_DOMAIN, "auto_update_reload_settings", handle_auto_update_reload_settings)
 
 
 async def async_unload_vision(hass: HomeAssistant) -> bool:
@@ -434,14 +403,12 @@ async def async_unload_vision(hass: HomeAssistant) -> bool:
     if mgr:
         mgr.stop()
 
-    # 3. Remove all services
-    hass.services.async_remove(DOMAIN, "refresh")
-    hass.services.async_remove(DOMAIN, "install_repository")
-    hass.services.async_remove(DOMAIN, "find_entity_refs")
-    hass.services.async_remove(DOMAIN, "replace_entity_refs")
-    for svc in ("auto_update_start", "auto_update_stop", "auto_update_trigger", "auto_update_reload_settings"):
+    # 3. Remove all services (registered under SERVICE_DOMAIN, not the
+    # internal data namespace DOMAIN)
+    for svc in ("refresh", "install_repository", "find_entity_refs", "replace_entity_refs",
+                "auto_update_start", "auto_update_stop", "auto_update_trigger", "auto_update_reload_settings"):
         try:
-            hass.services.async_remove(DOMAIN, svc)
+            hass.services.async_remove(SERVICE_DOMAIN, svc)
         except Exception:
             pass
 

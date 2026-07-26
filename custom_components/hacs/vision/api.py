@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -12,7 +13,7 @@ from .hacs_data import HACSData
 from .hacs_operator import HACSOperator
 from .backup import BackupManager
 from .dependency_checker import DependencyChecker
-from .response import _error, _ok, _not_found, _bad_request
+from .response import _error, _ok, _not_found, _bad_request, _server_error
 from .api_mixins.github_auth import GitHubAuthMixin
 from .api_mixins.github_actions import GitHubActionsMixin
 from .api_mixins.hacs_ops import HACSOpsMixin
@@ -102,6 +103,17 @@ class HACSEnhancedAPI(GitHubAuthMixin, GitHubActionsMixin, HACSOpsMixin, ReadmeT
 
     async def get(self, request, path: str = "") -> web.Response:
         """Handle GET requests."""
+        try:
+            return await self._dispatch_get(request, path)
+        except web.HTTPException:
+            # aiohttp's own HTTP errors (auth, not found, etc.) — re-raise
+            raise
+        except Exception as exc:  # noqa: BLE001 — last-resort guard for the UI
+            _LOGGER.exception("Unhandled error in GET /%s: %s", path, exc)
+            return _server_error("internal_error")
+
+    async def _dispatch_get(self, request, path: str = "") -> web.Response:
+        """Actual GET dispatch (wrapped by :meth:`get` for uniform error handling)."""
         if path.startswith("static/"):
             return _error("use_static_view", 404)
 
@@ -152,6 +164,8 @@ class HACSEnhancedAPI(GitHubAuthMixin, GitHubActionsMixin, HACSOpsMixin, ReadmeT
             return await self._config_flow_handlers(request)
         if path == "version":
             return web.json_response({"version": VERSION})
+        if path in ("health", "health/"):
+            return await self._health()
         if path in ("history", "history/"):
             return await self._get_history()
         if path.startswith("translations/"):
@@ -188,6 +202,37 @@ class HACSEnhancedAPI(GitHubAuthMixin, GitHubActionsMixin, HACSOpsMixin, ReadmeT
         history = HACSHubHistory(self.hass)
         records = await history.get_history()
         return web.json_response({"history": records})
+
+    async def _health(self) -> web.Response:
+        """Aggregated health snapshot for users — version / cache / HACS status.
+
+        Lets a non-technical user see at a glance whether HACS Vision is healthy
+        without digging into logs.
+        """
+        try:
+            operator = self.operator
+            hacs_available = bool(operator and operator.available)
+            repo_count = 0
+            cache_age = -1.0
+            prerelease_entries = 0
+            if operator:
+                repos = getattr(operator, "_repos_cache", None)
+                repo_count = len(repos) if repos is not None else 0
+                ts = getattr(operator, "_repos_cache_ts", 0.0)
+                cache_age = round(time.monotonic() - ts, 1) if ts else -1.0
+                prerelease_entries = len(getattr(operator, "_prerelease_cache", {}))
+            payload = {
+                "version": VERSION,
+                "status": "ok" if hacs_available else "degraded",
+                "hacs_available": hacs_available,
+                "repo_cache_count": repo_count,
+                "repo_cache_age_s": cache_age,
+                "prerelease_cache_entries": prerelease_entries,
+            }
+            return web.json_response(payload)
+        except Exception as exc:  # noqa: BLE001 — health must never 500 the panel
+            _LOGGER.exception("health error: %s", exc)
+            return _server_error("health_error")
 
     # ── POST ─────────────────────────────────────────────
 

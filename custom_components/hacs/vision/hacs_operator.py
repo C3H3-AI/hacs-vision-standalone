@@ -1,9 +1,11 @@
 """HACS internal operations via hass.data['hacs']."""
 from __future__ import annotations
 import asyncio
+import aiohttp
 import logging
 import re
 import threading
+import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -69,6 +71,12 @@ class HACSOperator:
         self._custom_repos_verified: bool = False
         # P2: Real-time install progress tracking (for frontend progress bar)
         self._install_progress: dict[str, dict] = {}
+        # O1: TTL cache for the (expensive) full repository list. Rebuilt at most
+        # once per REPO_CACHE_TTL seconds; invalidated explicitly on mutations.
+        self._repos_cache: list[dict] | None = None
+        self._repos_cache_ts: float = 0.0
+        # P1-2: longer-lived cache for pre-release GitHub probes (see _get_available_with_prerelease)
+        self._prerelease_cache: dict = {}
 
     @property
     def _hacs(self):
@@ -99,6 +107,9 @@ class HACSOperator:
         """Clear cached index, will be rebuilt on next access."""
         self._repo_index_by_id = None
         self._repo_index_by_name = None
+        # O1: also drop the (much heavier) repository-list cache
+        self._repos_cache = None
+        self._repos_cache_ts = 0.0
 
     async def _ensure_custom_repos_registered(self):
         """Ensure HACS repository index is ready.
@@ -297,14 +308,23 @@ class HACSOperator:
         #   B. installed=beta.3, available=v5.0.0 (HACS says stable only) → check if newer pre-release exists
         full_name = getattr(repo.data, 'full_name', '')
         if '/' in full_name:
+            # P1-2: serve pre-release probe from cache when fresh
+            cache_key = (full_name, installed)
+            cached = self._prerelease_cache.get(cache_key)
+            if cached and (time.monotonic() - cached[0]) < self.PRERELEASE_CACHE_TTL:
+                return cached[1]
             try:
                 releases = await self._fetch_github_releases(full_name)
                 installed_clean = installed.lstrip("vV")
+                new_tag: str | None = available
                 for r in releases:
                     tag = r.get("tag_name", "")
                     clean_tag = tag.lstrip("vV")
                     if clean_tag and clean_tag != installed_clean and _compare_versions(clean_tag, installed_clean) > 0:
-                        return tag  # Return full tag (with v prefix) for changelog API
+                        new_tag = tag  # Return full tag (with v prefix) for changelog API
+                        break
+                self._prerelease_cache[cache_key] = (time.monotonic(), new_tag)
+                return new_tag
             except Exception:
                 pass
         return available
@@ -425,8 +445,23 @@ class HACSOperator:
 
         return updates
 
+    # O1: cache TTL for the full repository list (seconds). The list is rebuilt
+    # at most once per window; mutations call invalidate_index() to drop it early.
+    REPO_CACHE_TTL = 30.0
+    # P1-2: separate, longer TTL for pre-release GitHub release probes. Pre-release
+    # users get one GitHub call per repo; caching across list rebuilds avoids repeats.
+    PRERELEASE_CACHE_TTL = 300.0
+
     async def get_all_repos_from_hacs(self) -> list[dict]:
-        """Get ALL repositories from HACS in-memory data (same source as HACS UI)."""
+        """Get ALL repositories from HACS in-memory data (same source as HACS UI).
+
+        Result is cached for REPO_CACHE_TTL seconds to avoid rebuilding ~3500
+        dicts (and hitting GitHub for pre-release detection) on every panel load.
+        """
+        # O1: serve from cache when fresh
+        if self._repos_cache is not None and (time.monotonic() - self._repos_cache_ts) < self.REPO_CACHE_TTL:
+            return self._repos_cache
+
         if not self.available:
             return []
 
@@ -582,6 +617,9 @@ class HACSOperator:
         except (AttributeError, KeyError, TypeError) as e:
             self._last_debug = f"outer_error: {e}"
 
+        # O1: store in TTL cache before returning
+        self._repos_cache = result
+        self._repos_cache_ts = time.monotonic()
         return result
 
     async def get_repo_releases(self, repo_id_or_name: str) -> list[dict]:
@@ -636,25 +674,24 @@ class HACSOperator:
             return []
 
     async def _fetch_github_releases(self, full_name: str) -> list[dict]:
-        """Fetch releases from GitHub API."""
+        """Fetch releases from GitHub API (reuses HA shared aiohttp session)."""
         try:
-            import aiohttp
+            session = async_get_clientsession(self.hass)
             headers = {"Accept": "application/vnd.github.v3+json"}
             token = self._get_github_token()
             if token:
                 headers["Authorization"] = f"token {token}"
             url = f"https://api.github.com/repos/{full_name}/releases?per_page=20"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return [{
-                            "tag_name": r.get("tag_name", ""),
-                            "name": r.get("name", ""),
-                            "prerelease": r.get("prerelease", False),
-                            "published_at": r.get("published_at", ""),
-                        } for r in data]
-                    _LOGGER.debug("GitHub API returned %d for %s", resp.status, full_name)
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return [{
+                        "tag_name": r.get("tag_name", ""),
+                        "name": r.get("name", ""),
+                        "prerelease": r.get("prerelease", False),
+                        "published_at": r.get("published_at", ""),
+                    } for r in data]
+                _LOGGER.debug("GitHub API returned %d for %s", resp.status, full_name)
         except Exception as e:
             _LOGGER.debug("_fetch_github_releases error: %s", e)
         return []
