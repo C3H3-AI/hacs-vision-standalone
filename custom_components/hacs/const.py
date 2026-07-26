@@ -11,6 +11,10 @@ MINIMUM_HA_VERSION = "2025.3.0"
 
 URL_BASE = "/hacsfiles"
 
+# Merged: toggle between HACS Vision panel (default) and the native/classic HACS UI.
+# Stored in config_entry.options; read at startup to decide which frontend panel to register.
+CONF_USE_CLASSIC_UI = "use_classic_ui"
+
 TV = TypeVar("TV")
 
 PACKAGE_NAME = "custom_components.hacs"

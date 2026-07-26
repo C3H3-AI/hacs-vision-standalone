@@ -23,7 +23,7 @@ from homeassistant.loader import async_get_integration
 import voluptuous as vol
 
 from .base import HacsBase
-from .const import CLIENT_ID, DOMAIN, LOCALE, MINIMUM_HA_VERSION
+from .const import CLIENT_ID, CONF_USE_CLASSIC_UI, DOMAIN, LOCALE, MINIMUM_HA_VERSION
 from .utils.configuration_schema import (
     APPDAEMON,
     COUNTRY,
@@ -215,11 +215,13 @@ class HacsOptionsFlowHandler(OptionsFlow):
         if hacs.queue.has_pending_tasks:
             return self.async_abort(reason="pending_tasks")
 
+        current_classic_ui = self.config_entry.options.get(CONF_USE_CLASSIC_UI, False)
         schema = {
             vol.Optional(SIDEPANEL_TITLE, default=hacs.configuration.sidepanel_title): str,
             vol.Optional(SIDEPANEL_ICON, default=hacs.configuration.sidepanel_icon): str,
             vol.Optional(COUNTRY, default=hacs.configuration.country): vol.In(LOCALE),
             vol.Optional(APPDAEMON, default=hacs.configuration.appdaemon): bool,
+            vol.Optional(CONF_USE_CLASSIC_UI, default=current_classic_ui): bool,
         }
 
         return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))

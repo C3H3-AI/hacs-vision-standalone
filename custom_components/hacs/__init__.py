@@ -23,7 +23,7 @@ from homeassistant.helpers.start import async_at_start
 from homeassistant.loader import async_get_integration
 
 from .base import HacsBase
-from .const import DOMAIN, HACS_SYSTEM_ID, MINIMUM_HA_VERSION
+from .const import CONF_USE_CLASSIC_UI, DOMAIN, HACS_SYSTEM_ID, MINIMUM_HA_VERSION
 from .data_client import HacsDataClient
 from .enums import HacsDisabledReason, HacsStage, LovelaceMode
 from .utils.data import HacsData
@@ -142,8 +142,19 @@ async def _async_initialize_integration(
         hacs.set_active_categories()
 
         async_register_websocket_commands(hass)
-        # Merged: HACS Vision is now the HACS panel / API (replaces native frontend)
-        await async_setup_vision(hass, hacs, config_entry)
+        # Merged: choose which frontend to mount at the "hacs" sidebar panel.
+        # - Default: HACS Vision panel (enhanced UI).
+        # - When the "use_classic_ui" option is enabled: the native/classic HACS panel.
+        # Both occupy the same "hacs" URL, so it is strictly one-or-the-other.
+        if config_entry.options.get(CONF_USE_CLASSIC_UI, False):
+            hacs.log.info("Classic HACS UI enabled — registering native frontend panel")
+            # Lazy import: the native frontend depends on the wheel-injected
+            # `hacs_frontend` package, which only the classic path needs.
+            from .frontend import async_register_frontend
+
+            await async_register_frontend(hass, hacs)
+        else:
+            await async_setup_vision(hass, hacs, config_entry)
 
         await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
