@@ -983,6 +983,17 @@ class HACSOpsMixin:
                 if hide:
                     async_remove_panel(self.hass, "hacs")
                 else:
+                    # Register the /hacsfiles/ static path so the
+                    # classic HACS UI can load entrypoint.js etc.
+                    try:
+                        from ...utils.workarounds import async_register_static_path
+                        from custom_components.hacs.hacs_frontend import locate_dir
+                        await async_register_static_path(
+                            self.hass, "/hacsfiles/frontend", locate_dir(),
+                            cache_headers=False,
+                        )
+                    except Exception as exc:
+                        _LOGGER.warning("Failed to register /hacsfiles/ static path: %s", exc)
                     async_register_built_in_panel(
                         self.hass,
                         component_name="custom",
@@ -994,7 +1005,7 @@ class HACSOpsMixin:
                                 "name": "hacs-frontend",
                                 "embed_iframe": True,
                                 "trust_external": False,
-                                "js_url": "/hacsfiles/frontend/entrypoint.js",
+                                "js_url": "/api/hacs_vision/static/hacsfiles/entrypoint.js",
                             }
                         },
                         require_admin=True,

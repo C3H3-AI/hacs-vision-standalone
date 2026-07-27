@@ -158,10 +158,10 @@ class HACSEnhancedAPI {
     if (!resp.ok) throw new Error(`Service call failed: ${resp.status}`);
     return resp.json();
   }
-  triggerAutoUpdate() { return this.callService('hacs_vision', 'auto_update_trigger'); }
-  reloadAutoUpdateSettings() { return this.callService('hacs_vision', 'auto_update_reload_settings'); }
-  startAutoUpdate() { return this.callService('hacs_vision', 'auto_update_start'); }
-  stopAutoUpdate() { return this.callService('hacs_vision', 'auto_update_stop'); }
+  triggerAutoUpdate() { return this.callService('hacs', 'auto_update_trigger'); }
+  reloadAutoUpdateSettings() { return this.callService('hacs', 'auto_update_reload_settings'); }
+  startAutoUpdate() { return this.callService('hacs', 'auto_update_start'); }
+  stopAutoUpdate() { return this.callService('hacs', 'auto_update_stop'); }
 
   /* Config Entries (for Add Integration button) */
   getConfigEntries() { return this.get('config_entries'); }

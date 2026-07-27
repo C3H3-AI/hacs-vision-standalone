@@ -11,9 +11,10 @@ import logging
 import os
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers import config_validation as cv
-import voluptuous as vol
+from aiohttp import web
 
 from .const import DOMAIN, PANEL_ICON, VERSION
 

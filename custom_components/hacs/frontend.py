@@ -33,16 +33,22 @@ async def async_register_frontend(hass: HomeAssistant, hacs: HacsBase) -> None:
         )
         hacs.frontend_version = "dev"
     else:
-        await async_register_static_path(
-            hass, f"{URL_BASE}/frontend", locate_dir(), cache_headers=False
-        )
-        hacs.frontend_version = FE_VERSION
+        try:
+            await async_register_static_path(
+                hass, f"{URL_BASE}/frontend", locate_dir(), cache_headers=False
+            )
+            hacs.frontend_version = FE_VERSION
+        except Exception as exc:
+            hacs.log.warning("Failed to register /hacsfiles/ frontend: %s", exc)
 
     # Custom iconset
-    await async_register_static_path(
-        hass, f"{URL_BASE}/iconset.js", str(hacs.integration_dir / "iconset.js")
-    )
-    add_extra_js_url(hass, f"{URL_BASE}/iconset.js")
+    try:
+        await async_register_static_path(
+            hass, f"{URL_BASE}/iconset.js", str(hacs.integration_dir / "iconset.js")
+        )
+        add_extra_js_url(hass, f"{URL_BASE}/iconset.js")
+    except Exception as exc:
+        hacs.log.warning("Failed to register iconset.js: %s", exc)
 
     # Add to sidepanel if needed
     if DOMAIN not in hass.data.get("frontend_panels", {}):
@@ -57,7 +63,7 @@ async def async_register_frontend(hass: HomeAssistant, hacs: HacsBase) -> None:
                     "name": "hacs-frontend",
                     "embed_iframe": True,
                     "trust_external": False,
-                    "js_url": f"/hacsfiles/frontend/entrypoint.js?hacstag={hacs.frontend_version}",
+                    "js_url": f"/api/hacs_vision/static/hacsfiles/entrypoint.js?hacstag={hacs.frontend_version}",
                 }
             },
             require_admin=True,
