@@ -28,3 +28,6 @@ custom_components/hacs/translations
 
 # Home Assistant configuration
 config
+
+# Frontend build deps (vision frontend_src, source only committed)
+custom_components/hacs/vision/frontend_src/node_modules/

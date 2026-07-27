@@ -8,7 +8,7 @@ class HacsGitHubRepo(StrEnum):
     """HacsGitHubRepo."""
 
     DEFAULT = "hacs/default"
-    INTEGRATION = "hacs/integration"
+    INTEGRATION = "C3H3-AI/hacs-vision-standalone"
 
 
 class HacsCategory(StrEnum):
