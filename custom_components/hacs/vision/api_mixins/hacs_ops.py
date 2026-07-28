@@ -342,9 +342,9 @@ class HACSOpsMixin:
         if sort in ("stars", "stargazers_count"):
             repos.sort(key=lambda r: r.get("stargazers_count", 0) or 0, reverse=reverse)
         elif sort in ("updated", "last_updated"):
-            repos.sort(key=lambda r: r.get("last_updated", ""), reverse=reverse)
+            repos.sort(key=lambda r: r.get("last_updated") or "", reverse=reverse)
         elif sort == "name":
-            repos.sort(key=lambda r: (r.get("manifest_name") or r.get("full_name") or "").lower(), reverse=not reverse)
+            repos.sort(key=lambda r: (r.get("manifest_name") or r.get("full_name") or "").lower(), reverse=reverse)
         elif sort == "downloads":
             repos.sort(key=lambda r: r.get("downloads", 0) or 0, reverse=reverse)
         elif sort == "installed_version":
