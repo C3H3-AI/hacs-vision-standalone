@@ -532,12 +532,16 @@ class EntityRefFinder:
     async def _save_auto_config(self, entity_id: str, config: dict) -> bool:
         """Save automation config via HA API."""
         auto_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+        # Remember original state to restore after save
+        original_state = self.hass.states.get(entity_id)
+        was_on = original_state and original_state.state == "on"
         try:
             await self.hass.services.async_call(
                 "automation", "turn_off", {"entity_id": entity_id}, blocking=False
             )
         except Exception:
             pass
+        saved = False
         # Method 1: internal API (HA <2025.9)
         try:
             from homeassistant.components.automation.config import (
@@ -546,11 +550,11 @@ class EntityRefFinder:
             await async_set_automation_config(
                 self.hass, auto_id, config, source="storage"
             )
-            return True
+            saved = True
         except Exception:
             pass
         # Method 2: REST API fallback (HA 2025.9+) — use the token passed from API handler
-        if self._hass_token:
+        if not saved and self._hass_token:
             try:
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession
                 base_url = self.hass.http.get_url()
@@ -560,10 +564,18 @@ class EntityRefFinder:
                     f"{base_url}/api/config/automation/config/{auto_id}",
                     json=config, headers=headers
                 ) as resp:
-                    return resp.status == 200
+                    saved = resp.status == 200
             except Exception as e:
                 _LOGGER.error("Save auto config failed: %s", e, exc_info=True)
-                return False
+        # Restore automation state — re-enable if it was on before
+        if was_on:
+            try:
+                await self.hass.services.async_call(
+                    "automation", "turn_on", {"entity_id": entity_id}, blocking=False
+                )
+            except Exception:
+                pass
+        return saved
 
     async def _get_script_config(self, entity_id: str) -> dict | None:
         """Get script config via HA API."""

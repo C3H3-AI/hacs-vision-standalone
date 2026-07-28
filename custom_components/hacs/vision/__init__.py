@@ -392,7 +392,7 @@ def _register_services(hass: HomeAssistant, operator) -> None:
     async def handle_auto_update_reload_settings(call: ServiceCall) -> None:
         mgr = hass.data.get(DOMAIN, {}).get("auto_update")
         if mgr:
-            mgr.reload_settings()
+            await mgr.reload_settings()
 
     hass.services.async_register(SERVICE_DOMAIN, "auto_update_start", handle_auto_update_start)
     hass.services.async_register(SERVICE_DOMAIN, "auto_update_stop", handle_auto_update_stop)

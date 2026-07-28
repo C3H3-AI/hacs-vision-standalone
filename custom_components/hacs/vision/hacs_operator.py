@@ -732,7 +732,6 @@ class HACSOperator:
                 await repo.async_install(version=version or repo.display_available_version)
                 self.set_install_progress(repo_key, 75, "installing", "Installing...")
                 self.invalidate_index()
-                self._cleanup_lock(repo_id_or_name)
                 to_version = version or repo.display_installed_version or ""
                 if from_version and to_version and from_version != to_version:
                     await self._history.add_record(repo.data.full_name, from_version, to_version)
@@ -741,6 +740,8 @@ class HACSOperator:
             except Exception as e:
                 _LOGGER.error("Install version failed: %s", e, exc_info=True)
                 return {"success": False, "error": str(e)}
+            finally:
+                self._cleanup_lock(repo_id_or_name)
 
     def get_repo_rt_status(self, repo_id_or_name: str) -> dict | None:
         """Get real-time status from HACS in-memory data (not from .storage file)."""

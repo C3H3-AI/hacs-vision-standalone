@@ -1032,6 +1032,16 @@ class HACSOpsMixin:
         existing = await self.data.get_settings()
         merged = {**existing, **filtered}
         ok = await self.data.set_settings(merged)
+        # BUG2 fix: notify AutoUpdateManager when auto_update settings change
+        _AU_KEYS = {"auto_update_enabled", "auto_update_repos", "auto_update_interval",
+                    "auto_update_notify", "auto_update_restart_time"}
+        if ok and _AU_KEYS & filtered.keys():
+            mgr = self.hass.data.get("hacs_vision", {}).get("auto_update")
+            if mgr:
+                try:
+                    await mgr.reload_settings()
+                except Exception as exc:
+                    _LOGGER.debug("auto_update reload after settings change failed: %s", exc)
         return web.json_response({"success": ok})
 
     async def _get_devices(self, entry_id: str) -> web.Response:
@@ -1302,7 +1312,7 @@ class HACSOpsMixin:
         if not old_id or not new_id:
             return _bad_request("old_id and new_id required")
         try:
-            token = self._extract_token(request) if request else self._current_token
+            token = self._extract_token(request) if request else None
             finder = EntityRefFinder(self.hass, hass_token=token)
             result = await finder.replace(old_id, new_id, preview=preview)
             if not preview and result.get("total_updated", 0) > 0:
