@@ -1,3 +1,5 @@
+"""DEPRECATED: This module is never loaded by HA (manifest domain is 'hacs').
+Kept for reference only. Safe to delete."""
 """Config flow for HACS Vision — panel integration, no options flow."""
 from homeassistant import config_entries
 from .const import DOMAIN, PANEL_TITLE

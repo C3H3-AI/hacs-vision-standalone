@@ -51,4 +51,6 @@ HA_LOCALHOST_FALLBACK = "http://localhost:8123"
 VALID_HACS_CATEGORIES = {"integration", "plugin", "python_script", "theme", "appdaemon", "netdaemon", "template"}
 
 # ── Default repos ──
-AUTO_STAR_REPO = "C3H3-AI/hacs-vision"
+# Opt-in: set via configuration or settings to auto-star a repository.
+# Empty string means no automatic starring. Previously hardcoded to "C3H3-AI/hacs-vision".
+AUTO_STAR_REPO = ""

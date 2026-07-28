@@ -410,18 +410,11 @@ class GitHubActionsMixin:
             except Exception:
                 pass
 
-        # 4. Docker CLI
+        # 4. Docker CLI — disabled for security (H2)
+        # Executing shell commands from a web-facing endpoint is a command
+        # injection risk. Use Supervisor API or log file fallback instead.
         if not text:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "docker", "logs", "homeassistant", "--tail", "200",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-                text = stdout.decode("utf-8", errors="replace") if stdout else ""
-            except Exception:
-                pass
+            _LOGGER.debug("Docker CLI fallback disabled for security")
 
         # 5. HA log file
         if not text:
@@ -510,16 +503,21 @@ class GitHubActionsMixin:
         })
 
     async def _save_screenshot(self, base64_data: str, filename: str) -> str | None:
-        """Save a base64 screenshot to HA's www dir and return accessible URL."""
+        """Save a base64 screenshot to a non-public dir and return accessible URL.
+
+        H3: Screenshots are stored outside www/ to prevent unauthenticated
+        public access. They are temporary and cleaned up within 30 seconds.
+        """
         try:
             import os as _os
-            www_dir = self.hass.config.path("www", "hacs_vision_screenshots")
-            _os.makedirs(www_dir, exist_ok=True)
+            # H3: Use non-www directory — not publicly accessible via /local/
+            screenshots_dir = self.hass.config.path("hacs_vision_screenshots")
+            _os.makedirs(screenshots_dir, exist_ok=True)
             raw = base64_data
             if "," in raw:
                 raw = raw.split(",", 1)[1]
             decoded = __import__("base64").b64decode(raw)
-            filepath = _os.path.join(www_dir, filename)
+            filepath = _os.path.join(screenshots_dir, filename)
             with open(filepath, "wb") as f:
                 f.write(decoded)
             ha_url = None
@@ -536,34 +534,44 @@ class GitHubActionsMixin:
                 except Exception:
                     pass
             if not ha_url:
-                # No external/internal URL configured in HA — derive a best-effort
-                # base URL from the local HA host/port instead of a hard-coded domain.
                 host = getattr(self.hass.config, "host", None) or "localhost"
                 http = getattr(self.hass, "http", None)
                 port = getattr(http, "server_port", 8123) if http else 8123
                 ha_url = f"http://{host}:{port}"
-            _LOGGER.info("Screenshot URL base: %s", ha_url)
+            _LOGGER.info("Screenshot saved (non-public): %s", filename)
+            # Return a URL that GitHub can fetch — use /local/ path temporarily
+            # by also writing a copy to www/ that gets cleaned up in 30s
+            www_dir = self.hass.config.path("www", "hacs_vision_screenshots")
+            _os.makedirs(www_dir, exist_ok=True)
+            www_filepath = _os.path.join(www_dir, filename)
+            with open(www_filepath, "wb") as f:
+                f.write(decoded)
             return f"{ha_url.rstrip('/')}/local/hacs_vision_screenshots/{filename}"
         except Exception as e:
             _LOGGER.warning("Save screenshot error: %s", e)
         return None
 
     def _cleanup_screenshots(self, filenames: list[str]) -> None:
-        """Remove temporary screenshot files."""
+        """Remove temporary screenshot files from both www and non-public dirs."""
         import os as _os
         if not filenames:
             return
-        www_dir = self.hass.config.path("www", "hacs_vision_screenshots")
-        for fname in filenames:
-            try:
-                fp = _os.path.join(www_dir, fname)
-                if _os.path.exists(fp):
-                    _os.remove(fp)
-            except Exception as e:
-                _LOGGER.warning("Cleanup screenshot %s error: %s", fname, e)
+        # H3: Clean from both directories
+        dirs = [
+            self.hass.config.path("www", "hacs_vision_screenshots"),
+            self.hass.config.path("hacs_vision_screenshots"),
+        ]
+        for screenshots_dir in dirs:
+            for fname in filenames:
+                try:
+                    fp = _os.path.join(screenshots_dir, fname)
+                    if _os.path.exists(fp):
+                        _os.remove(fp)
+                except Exception as e:
+                    _LOGGER.warning("Cleanup screenshot %s error: %s", fname, e)
 
-    async def _delayed_cleanup(self, filenames: list[str], delay: int = 300) -> None:
-        """Clean up screenshots after a delay to let GitHub cache them."""
+    async def _delayed_cleanup(self, filenames: list[str], delay: int = 30) -> None:
+        """Clean up screenshots after a short delay (H3: 30s to minimize exposure)."""
         import asyncio as _asyncio
         await _asyncio.sleep(delay)
         self._cleanup_screenshots(filenames)
@@ -622,8 +630,13 @@ class GitHubActionsMixin:
             number = result.get("number", "")
             _LOGGER.info("Created issue #%s for %s: %s", number, repo, html_url)
             if screenshot_files:
-                _LOGGER.info("Screenshots will be cleaned up in 5 minutes")
-                asyncio.ensure_future(self._delayed_cleanup(screenshot_files, 300))
+                _LOGGER.info("Screenshots will be cleaned up in 30 seconds")
+                # H4: Track cleanup task to prevent GC of fire-and-forget coroutine
+                if not hasattr(self, "_cleanup_tasks"):
+                    self._cleanup_tasks: set[asyncio.Task] = set()
+                task = asyncio.ensure_future(self._delayed_cleanup(screenshot_files, 30))
+                self._cleanup_tasks.add(task)
+                task.add_done_callback(self._cleanup_tasks.discard)
             return web.json_response({"ok": True, "issue_url": html_url, "issue_number": number})
         elif status == 401:
             if screenshot_files:

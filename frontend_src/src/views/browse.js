@@ -447,10 +447,11 @@ class BrowseView extends LitElement {
       }
       // Update header count
       this.tagCounts = { ...this.tagCounts, favorites: this._favorites.length };
-      try {
-        const panel = document.querySelector('hacs-vision-panel');
-        if (panel) { panel._favoriteCount = this._favorites.length; panel.requestUpdate(); }
-      } catch(e) {}
+      // M14: notify ancestors via CustomEvent instead of mutating the panel directly
+      this.dispatchEvent(new CustomEvent('hacs-favorite-changed', {
+        bubbles: true, composed: true,
+        detail: { count: this._favorites.length },
+      }));
     });
     this.addEventListener('favorite', (e) => {
       // Update local favorites list from card's toggle result (no extra API call)
@@ -549,10 +550,11 @@ class BrowseView extends LitElement {
         // Reload favorites and refresh UI
         await this._loadFavorites();
         this.tagCounts = { ...this.tagCounts, favorites: this._favorites.length };
-        try {
-          const panel = document.querySelector('hacs-vision-panel');
-          if (panel) { panel._favoriteCount = this._favorites.length; panel.requestUpdate(); }
-        } catch(e) {}
+        // M14: notify ancestors via CustomEvent instead of mutating the panel directly
+        this.dispatchEvent(new CustomEvent('hacs-favorite-changed', {
+          bubbles: true, composed: true,
+          detail: { count: this._favorites.length },
+        }));
         if (this._activeTag === 'favorites' || this._tagFilters?.includes('favorites')) {
           await this._load();
         } else {
@@ -608,10 +610,11 @@ class BrowseView extends LitElement {
 
     // 3. Sync counts
     this.tagCounts = { ...this.tagCounts, favorites: this._favorites.length };
-    try {
-      const panel = document.querySelector('hacs-vision-panel');
-      if (panel) { panel._favoriteCount = this._favorites.length; panel.requestUpdate(); }
-    } catch(e) {}
+    // M14: notify ancestors via CustomEvent instead of mutating the panel directly
+    this.dispatchEvent(new CustomEvent('hacs-favorite-changed', {
+      bubbles: true, composed: true,
+      detail: { count: this._favorites.length },
+    }));
   }
 
   async _batchLoadStarStatus() {

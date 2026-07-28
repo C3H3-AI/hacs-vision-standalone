@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 
 from aiogithubapi import GitHub, GitHubAPI
 import aiohttp
@@ -49,7 +50,7 @@ logging.basicConfig(
 
 def error(error: str):
     LOGGER.error(error)
-    exit(1)
+    sys.exit(1)
 
 
 def output_in_group(group: str, content: str):

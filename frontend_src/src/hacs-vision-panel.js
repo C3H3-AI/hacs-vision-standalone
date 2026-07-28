@@ -738,6 +738,14 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       this._showPreview = true;
     });
     this.addEventListener('favorite', () => this._loadStats());
+    // M14: child views report favorite count changes via CustomEvent
+    this.addEventListener('hacs-favorite-changed', (e) => {
+      const count = e.detail?.count;
+      if (typeof count === 'number') {
+        this._favoriteCount = count;
+        this.requestUpdate();
+      }
+    });
     // Config flow events from child views
     this.addEventListener('open-flow', (e) => {
       const domain = e.detail?.domain;
@@ -1712,6 +1720,11 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       showToast(t('issueNotLoggedIn'), 'error');
       return;
     }
+    // H6: escape repo name before interpolating into innerHTML to prevent XSS
+    const escapeHtml = (s) => String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const safeFullName = escapeHtml(fullName);
     // Build the dialog overlay
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -1720,7 +1733,7 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;cursor:pointer;user-select:none;" id="hv-issue-header">
           <div>
             <div style="font-size:17px;font-weight:600;color:var(--primary-text-color,#212121);">${t('reportIssue')}</div>
-            <div style="font-size:13px;color:var(--secondary-text-color,#727272);margin-top:2px;">${fullName} <span style="font-size:11px;opacity:0.6;">— ${t('issueExpand')}</span></div>
+            <div style="font-size:13px;color:var(--secondary-text-color,#727272);margin-top:2px;">${safeFullName} <span style="font-size:11px;opacity:0.6;">— ${t('issueExpand')}</span></div>
           </div>
           <span id="hv-issue-expand-btn" style="font-size:13px;color:var(--primary-color,#03a9f4);cursor:pointer;user-select:none;padding:4px 10px;border-radius:6px;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,#e0e0e0);line-height:1.4;" title="${t('issueExpand')}/${t('issueRestore')}">⛶ ${t('issueExpand')}</span>
         </div>

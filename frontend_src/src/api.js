@@ -4,6 +4,27 @@ class HACSEnhancedAPI {
   constructor() {
     this._token = null;
     this._hassRef = null;
+    // M15: per-key AbortControllers for request de-duplication
+    this._controllers = new Map();
+  }
+
+  /**
+   * M15: Cancel any in-flight request registered under `key` and return a
+   * fresh AbortSignal for the new one. Callers pass the key via
+   * options.dedupeKey so that rapid superseding calls (search/list) abort
+   * their predecessor instead of racing.
+   */
+  _dedupSignal(key) {
+    if (this._controllers.has(key)) {
+      try { this._controllers.get(key).abort(); } catch(e) { /* ignore */ }
+    }
+    const controller = new AbortController();
+    this._controllers.set(key, controller);
+    // Clean up the map entry once this request settles
+    controller.signal.addEventListener('abort', () => {
+      if (this._controllers.get(key) === controller) this._controllers.delete(key);
+    });
+    return controller.signal;
   }
 
   /** Call this when hass becomes available — primary token source */
@@ -36,7 +57,17 @@ class HACSEnhancedAPI {
       credentials: 'include',
     };
     if (body) opts.body = JSON.stringify(body);
-    opts.signal = AbortSignal.timeout(30000);
+    // M15: combine timeout with an optional per-key dedupe signal
+    // 60s timeout to accommodate slow HA instances (e.g. during startup or heavy load)
+    const timeoutSignal = AbortSignal.timeout(60000);
+    if (options.dedupeKey) {
+      const dedupeSignal = this._dedupSignal(options.dedupeKey);
+      opts.signal = (typeof AbortSignal.any === 'function')
+        ? AbortSignal.any([timeoutSignal, dedupeSignal])
+        : dedupeSignal;
+    } else {
+      opts.signal = timeoutSignal;
+    }
     try {
       const resp = await fetch(`${API_BASE}/${path}`, opts);
       if (!resp.ok) {
@@ -76,7 +107,8 @@ class HACSEnhancedAPI {
     if (params.tag) q.set('tag', params.tag);
     if (params.page) q.set('page', String(params.page));
     if (params.limit) q.set('limit', String(params.limit));
-    return this.get(`repositories?${q}`);
+    // M15: supersede any in-flight list/search request
+    return this.get(`repositories?${q}`, { dedupeKey: 'listRepositories' });
   }
   getRepository(id) { return this.get(`repositories/${id}`); }
   getInstalled() { return this.get('installed'); }

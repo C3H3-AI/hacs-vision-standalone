@@ -1,7 +1,9 @@
 """Read/write HACS .storage files."""
 from __future__ import annotations
+import base64
 import json
 import logging
+import os
 import time
 from typing import Any
 
@@ -31,6 +33,26 @@ class HACSData:
         if not rel_path:
             raise ValueError(f"Unknown storage key: {key}")
         return self.hass.config.path(rel_path)
+
+    # ── Token obfuscation helpers (C1 security fix) ──────────────────────
+    # NOTE: This is base64 encoding to prevent plaintext token exposure.
+    # Future migration: use HA's EncryptedStore or cryptography.fernet
+    # with a key derived from machine-id for true encryption at rest.
+
+    _TOKEN_STORAGE_KEY = "github_token"
+
+    @staticmethod
+    def _encode_token_value(token: str) -> str:
+        """Encode a token value with base64 to avoid plaintext storage."""
+        return "b64:" + base64.b64encode(token.encode("utf-8")).decode("ascii")
+
+    @staticmethod
+    def _decode_token_value(value: str) -> str:
+        """Decode a base64-encoded token value. Handles legacy plaintext."""
+        if value.startswith("b64:"):
+            return base64.b64decode(value[4:]).decode("utf-8")
+        # Legacy plaintext token — return as-is (will be re-encoded on next write)
+        return value
 
     async def _async_read_file(self, path: str) -> str | None:
         """Read a file in executor to avoid blocking."""
@@ -79,6 +101,11 @@ class HACSData:
             os.fsync(f.fileno())
         # Atomic replace (same filesystem) — no intermediate backup
         os.replace(temp_path, path)
+        # Restrict file permissions to owner-only (C1: protect sensitive data)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass  # Best-effort on platforms that don't support chmod
         # Clean up stale backup from previous runs
         backup_path = f"{path}.bak"
         if os.path.isfile(backup_path):
@@ -94,13 +121,21 @@ class HACSData:
         if content is None:
             return None
         try:
-            return json.loads(content)
+            data = json.loads(content)
         except json.JSONDecodeError as e:
             _LOGGER.error("Invalid JSON in %s: %s", path, e)
             return None
+        # C1: Decode obfuscated token on read
+        if key == self._TOKEN_STORAGE_KEY and isinstance(data, dict) and data.get("token"):
+            data["token"] = self._decode_token_value(data["token"])
+        return data
 
     async def write_storage(self, key: str, data: dict) -> bool:
         """Write to a .storage file with atomic backup."""
+        # C1: Encode token before persisting to avoid plaintext on disk
+        if key == self._TOKEN_STORAGE_KEY and isinstance(data, dict) and data.get("token"):
+            data = dict(data)  # shallow copy to avoid mutating caller's dict
+            data["token"] = self._encode_token_value(data["token"])
         content = json.dumps(data, indent=2, ensure_ascii=False)
         path = self._get_path(key)
         return await self._async_write_file(path, content)

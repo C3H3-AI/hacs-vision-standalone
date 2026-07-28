@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import time
 
 import aiohttp
@@ -28,6 +29,17 @@ def _int_param(val, default: int, lo: int | None = None, hi: int | None = None) 
 
 _LOGGER = logging.getLogger(__name__)
 
+# C2: Validate flow_id to prevent SSRF via crafted path segments.
+# HA config flow IDs are 32-char lowercase hex strings (UUID without dashes).
+import re as _re
+_FLOW_ID_RE = _re.compile(r"^[a-f0-9]{32}$")
+
+
+def _validate_flow_id(flow_id: str) -> bool:
+    """Return True if flow_id is a valid HA config flow identifier."""
+    return bool(_FLOW_ID_RE.match(flow_id))
+
+
 # Server-side caches (shared state for README, download counts, star counts)
 _README_CACHE: dict[str, dict] = {}
 _README_CACHE_TTL = 3600
@@ -38,17 +50,19 @@ _DOWNLOAD_CACHE_MAX = 500
 _STAR_CACHE: dict[str, dict] = {}
 _STAR_CACHE_TTL = 21600
 _STAR_CACHE_MAX = 500
+_CACHE_LOCK = threading.Lock()
 
 
 def _cache_put(cache: dict, key: str, value: dict, max_size: int) -> None:
     """Put into cache with size limit — evict oldest entry if full."""
-    if len(cache) >= max_size:
-        try:
-            oldest = min(cache, key=lambda k: cache[k].get("timestamp", 0))
-            del cache[oldest]
-        except (ValueError, KeyError):
-            cache.clear()
-    cache[key] = value
+    with _CACHE_LOCK:
+        if len(cache) >= max_size:
+            try:
+                oldest = min(cache, key=lambda k: cache[k].get("timestamp", 0))
+                del cache[oldest]
+            except (ValueError, KeyError):
+                cache.clear()
+        cache[key] = value
 
 
 class HACSOpsMixin:
@@ -107,7 +121,7 @@ class HACSOpsMixin:
                                        {"stars": stars, "timestamp": now}, _STAR_CACHE_MAX)
                             return full_name, stars
                 except Exception:
-                    pass
+                    _LOGGER.debug("Star count fetch failed for %s", full_name, exc_info=True)
                 _cache_put(_STAR_CACHE, full_name,
                            {"stars": 0, "timestamp": now}, _STAR_CACHE_MAX)
                 return full_name, 0
@@ -167,7 +181,7 @@ class HACSOpsMixin:
                                        {"count": total, "timestamp": now}, _DOWNLOAD_CACHE_MAX)
                             return full_name, total
                 except Exception:
-                    pass
+                    _LOGGER.debug("Download count fetch failed for %s", full_name, exc_info=True)
                 _cache_put(_DOWNLOAD_CACHE, full_name,
                            {"count": 0, "timestamp": now}, _DOWNLOAD_CACHE_MAX)
                 return full_name, 0
@@ -211,7 +225,7 @@ class HACSOpsMixin:
                     if fn in skipped_map:
                         r["has_update"] = False
         except Exception:
-            pass
+            _LOGGER.debug("Failed to cross-reference skipped versions", exc_info=True)
 
         install_times = await self.data.get_install_times()
         for r in repos:
@@ -224,14 +238,14 @@ class HACSOpsMixin:
             if installed:
                 await self._enrich_download_counts(installed)
         except Exception:
-            pass
+            _LOGGER.debug("Failed to enrich download counts", exc_info=True)
 
         try:
             installed = [r for r in repos if r.get("installed")]
             if installed:
                 await self._enrich_star_counts(installed)
         except Exception:
-            pass
+            _LOGGER.debug("Failed to enrich star counts", exc_info=True)
 
         entry_map = {}
         for entry in self.hass.config_entries.async_entries():
@@ -400,7 +414,7 @@ class HACSOpsMixin:
                     if fn in skipped_map:
                         item["has_update"] = False
         except Exception:
-            pass
+            _LOGGER.debug("Failed to cross-reference skipped versions in installed list", exc_info=True)
         return web.json_response({"installed": installed})
 
     async def _get_stats(self) -> web.Response:
@@ -433,7 +447,7 @@ class HACSOpsMixin:
                     if full_name not in ignored_set and full_name not in pending_restart_set:
                         updates_count += 1
         except Exception:
-            pass
+            _LOGGER.debug("Failed to count available updates from HA entities", exc_info=True)
         new_count = sum(1 for r in repos if r.get("new") or r.get("status") == "new")
         pending_restart_count = sum(1 for r in repos if r.get("pending_restart"))
         custom_count = sum(1 for r in repos if r.get("custom") or r.get("is_custom"))
@@ -481,7 +495,7 @@ class HACSOpsMixin:
                         if state.state != "on":
                             skipped_or_pending.add(fn)
                 except Exception:
-                    pass
+                    _LOGGER.debug("Failed to filter skipped/pending updates", exc_info=True)
                 updates = [u for u in hacs_updates if (u.get("full_name") or "") not in skipped_or_pending]
         return web.json_response({"updates": updates})
 
@@ -512,12 +526,12 @@ class HACSOpsMixin:
                     if r.get("full_name", "") in skipped_set:
                         r["has_update"] = False
         except Exception:
-            pass
+            _LOGGER.debug("Failed to cross-reference skipped versions in custom repos", exc_info=True)
         try:
             if custom:
                 await self._enrich_star_counts(custom)
         except Exception:
-            pass
+            _LOGGER.debug("Failed to enrich star counts for custom repos", exc_info=True)
         return web.json_response({"custom_repositories": custom})
 
     async def _export_backup(self) -> web.Response:
@@ -756,7 +770,7 @@ class HACSOpsMixin:
                 blocking=True
             )
         except Exception:
-            pass
+            _LOGGER.debug("Failed to call update.%s for %s", action, target_entity, exc_info=True)
 
     async def _get_ignored_versions(self) -> web.Response:
         data = await self.data.read_storage("ignored_versions")
@@ -1370,10 +1384,12 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Config flow start error for %s: %s", handler, e, exc_info=True)
-            return _error(f"flow_start_error: {e}", 500)
+            _LOGGER.debug("flow_start_error: %s", e, exc_info=True)
+            return _error("flow_start_error", 500)
 
     async def _config_flow_step(self, request: web.Request, flow_id: str, body: dict) -> web.Response:
+        if not _validate_flow_id(flow_id):
+            return _bad_request("invalid_flow_id")
         token = self._extract_token(request)
         if not token:
             return _unauthorized()
@@ -1385,10 +1401,12 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Config flow step error %s: %s", flow_id, e, exc_info=True)
-            return _error(f"flow_step_error: {e}", 500)
+            _LOGGER.debug("flow_step_error: %s", e, exc_info=True)
+            return _error("flow_step_error", 500)
 
     async def _config_flow_cancel(self, request: web.Request, flow_id: str) -> web.Response:
+        if not _validate_flow_id(flow_id):
+            return _bad_request("invalid_flow_id")
         token = self._extract_token(request)
         if not token:
             return _unauthorized()
@@ -1400,10 +1418,12 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Config flow cancel error %s: %s", flow_id, e, exc_info=True)
-            return _error(f"flow_cancel_error: {e}", 500)
+            _LOGGER.debug("flow_cancel_error: %s", e, exc_info=True)
+            return _error("flow_cancel_error", 500)
 
     async def _config_flow_subentry_cancel(self, request: web.Request, flow_id: str) -> web.Response:
+        if not _validate_flow_id(flow_id):
+            return _bad_request("invalid_flow_id")
         token = self._extract_token(request)
         if not token:
             return _unauthorized()
@@ -1415,8 +1435,8 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Subentry flow cancel error %s: %s", flow_id, e, exc_info=True)
-            return _error(f"subentry_cancel_error: {e}", 500)
+            _LOGGER.debug("subentry_cancel_error: %s", e, exc_info=True)
+            return _error("subentry_cancel_error", 500)
 
     async def _config_flow_options_start(self, request: web.Request, body: dict) -> web.Response:
         handler = body.get("handler")
@@ -1434,10 +1454,12 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Options flow start error %s: %s", handler, e, exc_info=True)
-            return _error(f"options_start_error: {e}", 500)
+            _LOGGER.debug("options_start_error: %s", e, exc_info=True)
+            return _error("options_start_error", 500)
 
     async def _config_flow_options_step(self, request: web.Request, flow_id: str, body: dict) -> web.Response:
+        if not _validate_flow_id(flow_id):
+            return _bad_request("invalid_flow_id")
         token = self._extract_token(request)
         if not token:
             return _unauthorized()
@@ -1449,8 +1471,8 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Options flow step error %s: %s", flow_id, e, exc_info=True)
-            return _error(f"options_step_error: {e}", 500)
+            _LOGGER.debug("options_step_error: %s", e, exc_info=True)
+            return _error("options_step_error", 500)
 
     async def _config_flow_subentry_start(self, request: web.Request, body: dict) -> web.Response:
         handler = body.get("handler")
@@ -1472,8 +1494,8 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Subentry flow start error %s: %s", handler, e, exc_info=True)
-            return _error(f"subentry_start_error: {e}", 500)
+            _LOGGER.debug("subentry_start_error: %s", e, exc_info=True)
+            return _error("subentry_start_error", 500)
 
     async def _get_subentries(self, request: web.Request, entry_id: str) -> web.Response:
         entry = self.hass.config_entries.async_get_entry(entry_id)
@@ -1491,6 +1513,8 @@ class HACSOpsMixin:
         return web.json_response({"subentries": result})
 
     async def _config_flow_subentry_step(self, request: web.Request, flow_id: str, body: dict) -> web.Response:
+        if not _validate_flow_id(flow_id):
+            return _bad_request("invalid_flow_id")
         token = self._extract_token(request)
         if not token:
             return _unauthorized()
@@ -1502,8 +1526,8 @@ class HACSOpsMixin:
                 data = await resp.json()
                 return web.Response(text=json.dumps(data), content_type="application/json", status=resp.status)
         except Exception as e:
-            _LOGGER.error("Subentry flow step error %s: %s", flow_id, e, exc_info=True)
-            return _error(f"subentry_step_error: {e}", 500)
+            _LOGGER.debug("subentry_step_error: %s", e, exc_info=True)
+            return _error("subentry_step_error", 500)
 
 
 def _read_json_text(path: str) -> dict | None:

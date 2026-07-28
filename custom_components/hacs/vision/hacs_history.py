@@ -2,6 +2,8 @@
 from __future__ import annotations
 import json
 import logging
+import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 from .const import STORAGE_PATHS
@@ -58,8 +60,13 @@ class HACSHubHistory:
         self._write_json(path, {"history": history})
 
     def _write_json(self, path: str, data: dict) -> None:
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
         try:
-            with open(path, "w") as f:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
-        except Exception as e:
-            _LOGGER.error("Failed to write history file: %s", e)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except BaseException:
+            os.unlink(tmp_path)
+            raise

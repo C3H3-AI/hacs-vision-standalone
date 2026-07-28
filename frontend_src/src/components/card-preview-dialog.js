@@ -294,8 +294,17 @@ script.onload = function() {
       // Signal success
       window.parent.postMessage({ type: 'hacs-preview-ready', cardName: card.name }, '*');
     } catch (e) {
-      container.innerHTML = '<div class="error">Failed to render card:<br><pre>' + e.message + '</pre></div>';
-      window.parent.postMessage({ type: 'hacs-preview-error', error: e.message }, '*');
+      // H6: build error DOM with textContent to avoid XSS from thrown error messages
+      container.innerHTML = '';
+      const errBox = document.createElement('div');
+      errBox.className = 'error';
+      errBox.appendChild(document.createTextNode('Failed to render card:'));
+      errBox.appendChild(document.createElement('br'));
+      const pre = document.createElement('pre');
+      pre.textContent = (e && e.message) ? e.message : String(e);
+      errBox.appendChild(pre);
+      container.appendChild(errBox);
+      window.parent.postMessage({ type: 'hacs-preview-error', error: (e && e.message) ? e.message : String(e) }, '*');
     }
   }, 500); // Wait for element registration
 };
@@ -314,6 +323,9 @@ document.head.appendChild(script);
   }
 
   _onMessage(e) {
+    // M9: only trust messages from our sandboxed data-URI iframe (origin "null")
+    // or from the same origin. Ignore everything else.
+    if (e.origin !== 'null' && e.origin !== window.location.origin) return;
     if (e.data?.type === 'hacs-preview-ready') {
       this._cardName = e.data.cardName;
     } else if (e.data?.type === 'hacs-preview-error') {

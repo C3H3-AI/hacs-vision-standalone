@@ -1,3 +1,5 @@
+> **⚠️ 更新 (2026-07-28)**: 本文档部分内容已过时。前端源码化已完成（`frontend_src/src/` 包含完整 Lit 源码）。P2-1 建议已实施。
+
 # HACS Vision 全面优化提升 · 可行性报告
 
 > 审计对象：`C3H3-AI/hacs-vision-standalone`（HACS 全量 fork-merge + `hacs.vision` 子包）

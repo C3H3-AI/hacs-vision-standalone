@@ -7,6 +7,7 @@ native HACS panel remains available separately), the REST API views, the
 brand-icon view, the sidebar badge, the auto-update manager and the HA services.
 """
 from __future__ import annotations
+import asyncio
 import logging
 import os
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -129,13 +130,23 @@ async def _auto_import_token(hass: HomeAssistant, shared_data) -> None:
                 from homeassistant.helpers import aiohttp_client
                 session = aiohttp_client.async_get_clientsession(hass)
                 headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
-                async with session.get("https://api.github.com/user", headers=headers,
-                                       timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        user = await resp.json()
-                        login = user.get("login", "?")
-                        await shared_data.write_storage("github_token", {"token": token, "user": login})
-                        _LOGGER.info("Auto-imported GitHub token from HACS (user: %s)", login)
+
+                async def _verify_token():
+                    async with session.get("https://api.github.com/user", headers=headers,
+                                           timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            return await resp.json()
+                        return None
+
+                try:
+                    user = await asyncio.wait_for(_verify_token(), timeout=5)
+                except asyncio.TimeoutError:
+                    _LOGGER.warning("Auto-import token: GitHub API timed out (5s), skipping")
+                    break
+                if user:
+                    login = user.get("login", "?")
+                    await shared_data.write_storage("github_token", {"token": token, "user": login})
+                    _LOGGER.info("Auto-imported GitHub token from HACS (user: %s)", login)
                 break
     except Exception as e:
         _LOGGER.debug("Auto-import token skipped: %s", e)

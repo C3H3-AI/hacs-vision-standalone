@@ -39,20 +39,22 @@ class HACSEnhancedStaticView(HomeAssistantView):
 
     def __init__(self, hass) -> None:
         self.hass = hass
+        # C3: Cache allowed path prefixes at startup — never resolve symlinks
+        # dynamically at request time to prevent runtime symlink manipulation.
+        self._allowed_prefixes: list[str] = [os.path.realpath(FRONTEND_DIR)]
+        hacsfiles_link = os.path.join(FRONTEND_DIR, "hacsfiles")
+        if os.path.islink(hacsfiles_link):
+            resolved = os.path.realpath(hacsfiles_link)
+            self._allowed_prefixes.append(resolved)
+            _LOGGER.debug("Static view: allowing symlink target %s", resolved)
+        _LOGGER.debug("Static view allowed prefixes: %s", self._allowed_prefixes)
 
     async def get(self, request, filename: str = "panel.js") -> web.Response:
         """Serve a static file."""
         filepath = os.path.join(FRONTEND_DIR, filename)
-        # Prevent path traversal — allow symlinks that resolve outside FRONTEND_DIR
+        # Prevent path traversal — validate against cached allowed prefixes
         real_path = os.path.realpath(filepath)
-        allowed_prefixes = [
-            os.path.realpath(FRONTEND_DIR),
-        ]
-        # Allow symlinked hacsfiles directory (hacs_frontend)
-        hacsfiles_link = os.path.join(FRONTEND_DIR, "hacsfiles")
-        if os.path.islink(hacsfiles_link):
-            allowed_prefixes.append(os.path.realpath(hacsfiles_link))
-        if not any(real_path.startswith(p) for p in allowed_prefixes):
+        if not any(real_path.startswith(p) for p in self._allowed_prefixes):
             return _bad_request("invalid_path")
         try:
             content = await self.hass.async_add_executor_job(self._read_file, filepath)
@@ -374,7 +376,7 @@ def _read_file_binary(path: str) -> bytes:
 
 
 class HACSBrandIconView(HomeAssistantView):
-    """Serve custom component brand icons (no auth - for <img> tags).
+    """Serve custom component brand icons (requires auth).
 
     Supports:
       /api/hacs_vision_brand/{domain}        -> icon.png / icon.svg
@@ -384,7 +386,7 @@ class HACSBrandIconView(HomeAssistantView):
 
     url = "/api/hacs_vision_brand/{domain:.*}"
     name = "api:hacs_vision_brand"
-    requires_auth = False
+    requires_auth = True  # H1: require authentication to prevent unauthenticated file enumeration
 
     def __init__(self, hass):
         self.hass = hass

@@ -18,7 +18,7 @@ permissions: {}
 
 jobs:
   preflight:
-    if: ${{ github.repository == 'hacs/integration' }}
+    if: ${{ github.repository == 'C3H3-AI/hacs-vision-standalone' }}
     runs-on: ubuntu-latest
     name: Preflight
     steps:

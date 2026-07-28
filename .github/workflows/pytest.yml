@@ -94,6 +94,10 @@ jobs:
 
       - name: 📤 Upload coverage to Codecov
         if: ${{ matrix.python-version == '3.14' }}
-        run: |
-          scripts/coverage
-          curl -sfSL https://codecov.io/bash | bash -
+        run: scripts/coverage
+
+      - name: Upload coverage to Codecov
+        if: ${{ matrix.python-version == '3.14' }}
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24  # v4.6.0
+        with:
+          fail_ci_if_error: false

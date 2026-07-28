@@ -64,6 +64,13 @@ class HACSOperator:
         self._history = HACSHubHistory(hass)
         self._repo_index_by_id = None
         self._repo_index_by_name = None
+        # H5: threading.Lock is intentionally kept here (not asyncio.Lock) because:
+        # 1. _ensure_index() is a synchronous method called from sync helpers
+        #    (_find_repo_by_id, _find_repo_by_full_name) which cannot use `async with`.
+        # 2. The critical section is purely in-memory dict construction (~microseconds),
+        #    so it will never block the event loop meaningfully.
+        # 3. Converting to asyncio.Lock would require making the entire _find_repo*
+        #    call chain async — a large refactor with no practical benefit.
         self._index_lock = threading.Lock()
         # P1: Install/update/remove locks for idempotency protection
         self._install_locks: dict[str, asyncio.Lock] = {}
