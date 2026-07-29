@@ -33,4 +33,4 @@ jobs:
         run: python -m pip install --quiet pytest
 
       - name: Run fork vision tests
-        run: python -m pytest -q tests/vision
+        run: python -m pytest -q -o addopts="" vision_tests
