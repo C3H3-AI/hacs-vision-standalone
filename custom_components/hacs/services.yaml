@@ -2,63 +2,63 @@
 # These services are registered by HACS Vision (merged subpackage) under the
 # `hacs` domain. Descriptions here are purely cosmetic (HA reads services.yaml
 # for the UI); the actual registration + schema live in vision/__init__.py.
-hacs:
-  refresh:
-    name: HACS Vision 刷新仓库
-    description: 强制刷新 HACS 仓库目录（从 GitHub 拉取最新仓库索引与版本信息）。
-  install_repository:
-    name: HACS Vision 安装仓库
-    description: 通过全名（owner/repo）安装一个 HACS 仓库到指定分类。
-    fields:
-      repository:
-        name: 仓库全名
-        description: 仓库的 GitHub 全名，例如 "C3H3-AI/hacs-vision"。
-        required: true
-        example: C3H3-AI/hacs-vision
-      category:
-        name: 分类
-        description: 仓库分类：integration / plugin / theme / appdaemon / python_script / template。
-        required: false
-        example: integration
-        default: integration
-  find_entity_refs:
-    name: HACS Vision 查找实体引用
-    description: 在自动化、脚本、场景、仪表盘中查找引用了某实体的所有位置，结果以持久通知展示。
-    fields:
-      entity_id:
-        name: 实体 ID
-        description: 要查找的实体 ID，例如 "light.living_room"。
-        required: true
-        example: light.living_room
-  replace_entity_refs:
-    name: HACS Vision 替换实体引用
-    description: 将所有引用 old_id 的位置替换为 new_id。默认 preview=true 仅预览，设 false 才真正执行并重新加载受影响项。
-    fields:
-      old_id:
-        name: 原实体 ID
-        description: 被替换的实体 ID。
-        required: true
-        example: light.living_room
-      new_id:
-        name: 新实体 ID
-        description: 替换后的实体 ID。
-        required: true
-        example: light.office
-      preview:
-        name: 仅预览
-        description: 为 true 时只预览影响范围不修改；为 false 时执行替换并重新加载受影响配置。
-        required: false
-        example: true
-        default: true
-  auto_update_start:
-    name: HACS Vision 自动更新 启动
-    description: 启动 HACS Vision 自动更新管理器（按设定间隔检查并升级已装仓库）。
-  auto_update_stop:
-    name: HACS Vision 自动更新 停止
-    description: 停止 HACS Vision 自动更新管理器。
-  auto_update_trigger:
-    name: HACS Vision 自动更新 立即执行
-    description: 立即触发一次自动更新检查（忽略间隔）。
-  auto_update_reload_settings:
-    name: HACS Vision 自动更新 重载设置
-    description: 重新读取自动更新的配置（启用开关、目标仓库、间隔、通知等），无需重启。
+# NOTE: services.yaml must list services at the TOP LEVEL (no domain wrapper).
+refresh:
+  name: HACS Vision 刷新仓库
+  description: 强制刷新 HACS 仓库目录（从 GitHub 拉取最新仓库索引与版本信息）。
+install_repository:
+  name: HACS Vision 安装仓库
+  description: 通过全名（owner/repo）安装一个 HACS 仓库到指定分类。
+  fields:
+    repository:
+      name: 仓库全名
+      description: 仓库的 GitHub 全名，例如 "C3H3-AI/hacs-vision"。
+      required: true
+      example: C3H3-AI/hacs-vision
+    category:
+      name: 分类
+      description: 仓库分类：integration / plugin / theme / appdaemon / python_script / template。
+      required: false
+      example: integration
+      default: integration
+find_entity_refs:
+  name: HACS Vision 查找实体引用
+  description: 在自动化、脚本、场景、仪表盘中查找引用了某实体的所有位置，结果以持久通知展示。
+  fields:
+    entity_id:
+      name: 实体 ID
+      description: 要查找的实体 ID，例如 "light.living_room"。
+      required: true
+      example: light.living_room
+replace_entity_refs:
+  name: HACS Vision 替换实体引用
+  description: 将所有引用 old_id 的位置替换为 new_id。默认 preview=true 仅预览，设 false 才真正执行并重新加载受影响项。
+  fields:
+    old_id:
+      name: 原实体 ID
+      description: 被替换的实体 ID。
+      required: true
+      example: light.living_room
+    new_id:
+      name: 新实体 ID
+      description: 替换后的实体 ID。
+      required: true
+      example: light.office
+    preview:
+      name: 仅预览
+      description: 为 true 时只预览影响范围不修改；为 false 时执行替换并重新加载受影响配置。
+      required: false
+      example: true
+      default: true
+auto_update_start:
+  name: HACS Vision 自动更新 启动
+  description: 启动 HACS Vision 自动更新管理器（按设定间隔检查并升级已装仓库）。
+auto_update_stop:
+  name: HACS Vision 自动更新 停止
+  description: 停止 HACS Vision 自动更新管理器。
+auto_update_trigger:
+  name: HACS Vision 自动更新 立即执行
+  description: 立即触发一次自动更新检查（忽略间隔）。
+auto_update_reload_settings:
+  name: HACS Vision 自动更新 重载设置
+  description: 重新读取自动更新的配置（启用开关、目标仓库、间隔、通知等），无需重启。

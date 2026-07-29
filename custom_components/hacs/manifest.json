@@ -2,7 +2,8 @@
     "domain": "hacs",
     "name": "HACS (Vision)",
     "after_dependencies": [
-        "python_script"
+        "python_script",
+        "blueprint"
     ],
     "codeowners": [
         "@C3H3-AI"
