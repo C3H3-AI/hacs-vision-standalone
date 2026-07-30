@@ -935,6 +935,76 @@ class HACSOperator:
             _LOGGER.warning("GitHub API error for %s: %s", full_name, ex)
         return None
 
+    async def check_invalid_repositories(self) -> list[dict]:
+        """A3: Scan installed repositories for GitHub-archived or missing (404/renamed).
+
+        Returns a list of {"full_name", "reason", "installed_version"} where
+        reason is "archived" or "missing".
+        """
+        if not self.available:
+            return []
+        installed = self.get_installed_list()
+        invalid: list[dict] = []
+        for repo in installed:
+            full_name = repo.get("full_name")
+            if not full_name:
+                continue
+            result = await self._probe_repo_status(full_name)
+            if result is None:
+                # Transient failure (timeout / rate-limit / 403) — skip this repo
+                continue
+            status, archived = result
+            if status == "missing":
+                invalid.append({
+                    "full_name": full_name,
+                    "reason": "missing",
+                    "installed_version": repo.get("installed_version"),
+                })
+            elif archived:
+                invalid.append({
+                    "full_name": full_name,
+                    "reason": "archived",
+                    "installed_version": repo.get("installed_version"),
+                })
+        return invalid
+
+    async def _probe_repo_status(self, full_name: str):
+        """Probe a single repo on GitHub.
+
+        Returns (status, archived):
+          - ("ok", bool)       : repo exists; archived flag from GitHub
+          - ("missing", False) : 404 (deleted) or redirect (renamed)
+          - None               : transient error (timeout / 403 rate-limit) — caller should skip
+        """
+        session = async_get_clientsession(self.hass)
+        url = f"https://api.github.com/repos/{full_name}"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        token = self._get_github_token()
+        if token:
+            headers["Authorization"] = f"token {token}"
+        try:
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return ("ok", bool(data.get("archived", False)))
+                if resp.status in (404, 301, 302):
+                    # 404 = deleted; 301/302 = renamed (we don't follow redirects)
+                    return ("missing", False)
+                if resp.status == 403:
+                    # Rate limited — treat as transient
+                    _LOGGER.debug("GitHub rate-limited probing %s", full_name)
+                    return None
+                _LOGGER.debug("GitHub probe returned %s for %s", resp.status, full_name)
+                return None
+        except asyncio.TimeoutError:
+            _LOGGER.debug("GitHub probe timed out for %s", full_name)
+            return None
+        except Exception as ex:
+            _LOGGER.debug("GitHub probe error for %s: %s", full_name, ex)
+            return None
+
     async def _find_config_entry_id(self, domain: str | None) -> str | None:
         """Find HA config entry ID for a given integration domain."""
         if not domain:

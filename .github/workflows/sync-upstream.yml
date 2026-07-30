@@ -1,0 +1,54 @@
+name: Sync upstream HACS
+
+# P1-3: 防止 fork 长期漂移。
+# 每周（或手动）将官方 hacsorg/hacs 的新提交 rebase 进本 fork，
+# 结果写入独立的 `sync-upstream` 分支并自动开/更新一个 PR 到 main。
+# 注意：本工作流 NEVER 直接 push 到 main —— 合并 PR 仍需人工审批。
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"   # 每周一 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream & fetch
+        run: |
+          git remote add upstream https://github.com/hacsorg/hacs.git || true
+          git fetch upstream --tags
+
+      - name: Rebase fork onto upstream/main
+        run: |
+          git checkout -B sync-upstream origin/main
+          git rebase upstream/main
+
+      - name: Push sync-upstream branch
+        run: git push --force-with-lease origin sync-upstream
+
+      - name: Open or update PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --head sync-upstream \
+            --base main \
+            --title "chore: sync upstream HACS" \
+            --body "自动每周同步官方 hacsorg/hacs 至本 fork（rebase）。请人工审查后合并到 main。" \
+          || gh pr edit sync-upstream --title "chore: sync upstream HACS"

@@ -3,7 +3,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "hacs_vision"
 DOMAIN_HACS = "hacs"
-VERSION = "6.6.0"
+VERSION = "7.1.0"
 
 PANEL_TITLE = "HACS Vision"
 PANEL_ICON = "hacs:hacs"
@@ -38,6 +38,15 @@ DEFAULT_AUTO_UPDATE_REPOS = []
 DEFAULT_AUTO_UPDATE_INTERVAL = 21600  # 6 hours
 DEFAULT_AUTO_UPDATE_NOTIFY = True
 DEFAULT_AUTO_UPDATE_RESTART_TIME = ""
+
+# ── Repo health (A3: 主动失效检测) ──
+CONF_REPO_HEALTH_ENABLED = "repo_health_enabled"
+CONF_REPO_HEALTH_INTERVAL = "repo_health_interval"
+CONF_REPO_HEALTH_NOTIFY = "repo_health_notify"
+
+DEFAULT_REPO_HEALTH_ENABLED = True
+DEFAULT_REPO_HEALTH_INTERVAL = 86400  # 24 hours
+DEFAULT_REPO_HEALTH_NOTIFY = True
 
 PLATFORMS: list[Platform] = []
 

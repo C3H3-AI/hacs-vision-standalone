@@ -11,8 +11,19 @@ MINIMUM_HA_VERSION = "2025.3.0"
 
 URL_BASE = "/hacsfiles"
 
-# Merged: toggle between HACS Vision panel (default) and the native/classic HACS UI.
-# Stored in config_entry.options; read at startup to decide which frontend panel to register.
+# Merged: single "panel_mode" setting replaces the old split between
+# `use_classic_ui` (config flow) and `hide_hacs_panel` (Vision settings).
+# Stored in config_entry.options; read at startup to decide which frontend panel(s) to register.
+#   "vision"  (default): HACS Vision panel only, original `hacs` sidebar entry hidden
+#   "both"            : HACS Vision panel + original `hacs` sidebar entry both shown
+#   "classic"         : native/classic HACS UI only (at the `hacs` URL)
+CONF_PANEL_MODE = "panel_mode"
+PANEL_MODE_VISION = "vision"
+PANEL_MODE_BOTH = "both"
+PANEL_MODE_CLASSIC = "classic"
+DEFAULT_PANEL_MODE = PANEL_MODE_VISION
+
+# Kept for read-back migration of legacy installs that stored the old boolean.
 CONF_USE_CLASSIC_UI = "use_classic_ui"
 
 TV = TypeVar("TV")

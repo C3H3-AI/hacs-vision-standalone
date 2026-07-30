@@ -23,7 +23,18 @@ from homeassistant.loader import async_get_integration
 import voluptuous as vol
 
 from .base import HacsBase
-from .const import CLIENT_ID, CONF_USE_CLASSIC_UI, DOMAIN, LOCALE, MINIMUM_HA_VERSION
+from .const import (
+    CLIENT_ID,
+    CONF_PANEL_MODE,
+    CONF_USE_CLASSIC_UI,
+    DEFAULT_PANEL_MODE,
+    DOMAIN,
+    LOCALE,
+    MINIMUM_HA_VERSION,
+    PANEL_MODE_BOTH,
+    PANEL_MODE_CLASSIC,
+    PANEL_MODE_VISION,
+)
 from .utils.configuration_schema import (
     APPDAEMON,
     COUNTRY,
@@ -215,13 +226,27 @@ class HacsOptionsFlowHandler(OptionsFlow):
         if hacs.queue.has_pending_tasks:
             return self.async_abort(reason="pending_tasks")
 
-        current_classic_ui = self.config_entry.options.get(CONF_USE_CLASSIC_UI, False)
+        # Merged settings: derive the current panel_mode from the new key,
+        # falling back to the legacy `use_classic_ui` boolean for old installs.
+        current_mode = self.config_entry.options.get(CONF_PANEL_MODE, None)
+        if current_mode not in (PANEL_MODE_VISION, PANEL_MODE_BOTH, PANEL_MODE_CLASSIC):
+            legacy_classic = self.config_entry.options.get(CONF_USE_CLASSIC_UI, False)
+            current_mode = PANEL_MODE_CLASSIC if legacy_classic else DEFAULT_PANEL_MODE
         schema = {
             vol.Optional(SIDEPANEL_TITLE, default=hacs.configuration.sidepanel_title): str,
             vol.Optional(SIDEPANEL_ICON, default=hacs.configuration.sidepanel_icon): str,
             vol.Optional(COUNTRY, default=hacs.configuration.country): vol.In(LOCALE),
             vol.Optional(APPDAEMON, default=hacs.configuration.appdaemon): bool,
-            vol.Optional(CONF_USE_CLASSIC_UI, default=current_classic_ui): bool,
+            vol.Optional(
+                CONF_PANEL_MODE,
+                default=current_mode,
+            ): vol.In(
+                {
+                    PANEL_MODE_VISION: "Vision 界面（隐藏原版 HACS 入口）",
+                    PANEL_MODE_BOTH: "Vision 界面 + 原版 HACS 入口",
+                    PANEL_MODE_CLASSIC: "原版 HACS 界面",
+                }
+            ),
         }
 
         return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))

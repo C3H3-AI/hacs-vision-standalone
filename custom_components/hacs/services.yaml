@@ -62,3 +62,6 @@ auto_update_trigger:
 auto_update_reload_settings:
   name: HACS Vision 自动更新 重载设置
   description: 重新读取自动更新的配置（启用开关、目标仓库、间隔、通知等），无需重启。
+check_invalid_repos:
+  name: HACS Vision 失效仓库检测
+  description: 立即扫描所有已安装仓库，检测是否已被作者归档（archived）或从 GitHub 删除/改名（404/renamed）。发现失效仓库时发持久通知，并在开发者工具中列出结果。

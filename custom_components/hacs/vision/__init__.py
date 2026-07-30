@@ -18,6 +18,7 @@ from homeassistant.helpers import config_validation as cv
 from aiohttp import web
 
 from .const import DOMAIN, PANEL_ICON, VERSION
+from ..const import CONF_PANEL_MODE, DEFAULT_PANEL_MODE, PANEL_MODE_BOTH
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
@@ -35,6 +36,9 @@ STORE_KEY = "hacs_vision"
 # domain no longer exists after the fork-merge, so services are registered under
 # `hacs` to avoid HA failing to load a non-existent services.yaml on every startup.
 SERVICE_DOMAIN = "hacs"
+# Legacy domain kept for backward compatibility — callers (automations, docs,
+# older UI) that still use the old `hacs_vision.*` service names keep working.
+LEGACY_SERVICE_DOMAIN = "hacs_vision"
 
 
 async def async_setup_vision(
@@ -59,13 +63,16 @@ async def async_setup_vision(
     hass.http.register_view(HACSBrandIconView(hass))
     await _register_panel(hass)
 
-    # Auto-hide original HACS sidebar if setting is enabled
+    # Hide the original `hacs` sidebar entry unless panel_mode == "both".
+    # (Replaces the old `hide_hacs_panel` Vision-settings toggle — the single
+    #  `panel_mode` config-flow setting now controls which panel(s) are visible.)
     try:
-        hacs_settings = await shared_data.get_settings()
-        if hacs_settings.get("hide_hacs_panel"):
+        panel_mode = (config_entry.options.get(CONF_PANEL_MODE, DEFAULT_PANEL_MODE)
+                      if config_entry is not None else DEFAULT_PANEL_MODE)
+        if panel_mode != PANEL_MODE_BOTH:
             from homeassistant.components.frontend import async_remove_panel
             async_remove_panel(hass, "hacs")
-            _LOGGER.info("Auto-hid HACS sidebar from settings")
+            _LOGGER.info("Auto-hid original HACS sidebar (panel_mode=%s)", panel_mode)
     except Exception as exc:
         _LOGGER.debug("HACS panel auto-hide skipped: %s", exc)
 
@@ -88,6 +95,12 @@ async def async_setup_vision(
     auto_update = AutoUpdateManager(hass, operator=operator, data=shared_data)
     hass.data[DOMAIN]["auto_update"] = auto_update
     await auto_update.start()
+
+    # Create and start RepoHealthManager (A3: proactive invalid-repo detection)
+    from .repo_health import RepoHealthManager
+    repo_health = RepoHealthManager(hass, operator=operator, data=shared_data)
+    hass.data[DOMAIN]["repo_health"] = repo_health
+    await repo_health.start()
 
     # Register services
     _register_services(hass, operator)
@@ -399,6 +412,51 @@ def _register_services(hass: HomeAssistant, operator) -> None:
     hass.services.async_register(SERVICE_DOMAIN, "auto_update_trigger", handle_auto_update_trigger)
     hass.services.async_register(SERVICE_DOMAIN, "auto_update_reload_settings", handle_auto_update_reload_settings)
 
+    # ── Repo health (A3) services ──
+
+    async def handle_repo_health_check(call: ServiceCall) -> None:
+        mgr = hass.data.get(DOMAIN, {}).get("repo_health")
+        if not mgr:
+            return
+        result = await mgr.trigger()
+        invalid = result.get("invalid", [])
+        if invalid:
+            msg = f"🔍 Found {len(invalid)} invalid repos:\n" + "\n".join(
+                f"  • {r['full_name']} — {r['reason']} (installed {r.get('installed_version') or '?'})"
+                for r in invalid
+            )
+        else:
+            msg = "✅ No invalid repositories found."
+        await hass.services.async_call(
+            "persistent_notification", "create",
+            {"title": "HACS Vision - Repo Health Check", "message": msg},
+            blocking=False,
+        )
+
+    hass.services.async_register(SERVICE_DOMAIN, "check_invalid_repos", handle_repo_health_check)
+
+    # Backward-compat: also expose every vision service under the legacy
+    # "hacs_vision" domain so callers using the old names (e.g.
+    # hacs_vision.auto_update_reload_settings) keep resolving instead of
+    # raising "service not found". Schemas are intentionally omitted here —
+    # the primary hacs.* registration carries validation; legacy callers
+    # that already worked pre-merge passed raw fields.
+    for _svc, _hdlr in (
+        ("refresh", handle_refresh),
+        ("install_repository", handle_install_repository),
+        ("find_entity_refs", handle_find_entity_refs),
+        ("replace_entity_refs", handle_replace_entity_refs),
+        ("auto_update_start", handle_auto_update_start),
+        ("auto_update_stop", handle_auto_update_stop),
+        ("auto_update_trigger", handle_auto_update_trigger),
+        ("auto_update_reload_settings", handle_auto_update_reload_settings),
+        ("check_invalid_repos", handle_repo_health_check),
+    ):
+        try:
+            hass.services.async_register(LEGACY_SERVICE_DOMAIN, _svc, _hdlr)
+        except Exception:
+            _LOGGER.debug("Failed to register legacy service %s.%s", LEGACY_SERVICE_DOMAIN, _svc)
+
 
 async def async_unload_vision(hass: HomeAssistant) -> bool:
     """Tear down HACS Vision features."""
@@ -410,19 +468,24 @@ async def async_unload_vision(hass: HomeAssistant) -> bool:
     except Exception:
         pass
 
-    # 2. Stop AutoUpdateManager
+    # 2. Stop AutoUpdateManager + RepoHealthManager
     mgr = hass.data.get(DOMAIN, {}).get("auto_update")
     if mgr:
         mgr.stop()
+    health_mgr = hass.data.get(DOMAIN, {}).get("repo_health")
+    if health_mgr:
+        health_mgr.stop()
 
-    # 3. Remove all services (registered under SERVICE_DOMAIN, not the
-    # internal data namespace DOMAIN)
+    # 3. Remove all services (registered under SERVICE_DOMAIN + legacy domain,
+    # not the internal data namespace DOMAIN)
     for svc in ("refresh", "install_repository", "find_entity_refs", "replace_entity_refs",
-                "auto_update_start", "auto_update_stop", "auto_update_trigger", "auto_update_reload_settings"):
-        try:
-            hass.services.async_remove(SERVICE_DOMAIN, svc)
-        except Exception:
-            pass
+                "auto_update_start", "auto_update_stop", "auto_update_trigger",
+                "auto_update_reload_settings", "check_invalid_repos"):
+        for _domain in (SERVICE_DOMAIN, LEGACY_SERVICE_DOMAIN):
+            try:
+                hass.services.async_remove(_domain, svc)
+            except Exception:
+                pass
 
     # 4. Remove event listeners
     for listener in hass.data.get(DOMAIN, {}).get("listeners", []):

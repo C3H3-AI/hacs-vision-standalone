@@ -234,9 +234,6 @@ class ConfigView extends LitElement {
   async _toggleImmediate(key, val) {
     this._settings = { ...this._settings, [key]: val };
     await this._save();
-    if (key === 'hide_hacs_panel') {
-      this._toggleSidebarHacs(!val);
-    }
   }
 
   _toggleSidebarHacs(visible) {
@@ -967,19 +964,6 @@ class ConfigView extends LitElement {
                 <label class="toggle">
                   <input type="checkbox" .checked=${this._settings.notify_restart ?? true}
                     @change=${e => this._toggleImmediate('notify_restart', e.target.checked)}>
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <div class="label">${t('hideHacsPanel')}</div>
-                <div class="desc">${t('hideHacsPanelDesc')}</div>
-              </div>
-              <div class="setting-control">
-                <label class="toggle">
-                  <input type="checkbox" .checked=${this._settings.hide_hacs_panel ?? false}
-                    @change=${e => this._toggleImmediate('hide_hacs_panel', e.target.checked)}>
                   <span class="slider"></span>
                 </label>
               </div>

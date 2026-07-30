@@ -49,7 +49,7 @@
                     "appdaemon": "启用 AppDaemon 应用的发现与跟踪",
                     "sidepanel_icon": "侧边栏图标",
                     "sidepanel_title": "侧边栏标题",
-                    "use_classic_ui": "使用原版 HACS 界面（关闭则使用 Vision 界面）。修改后需重启或重新加载生效。"
+                    "panel_mode": "界面模式（Vision 界面 / 原版 HACS 界面 / 两者）。修改后需重新加载集成生效。"
                 }
             }
         }

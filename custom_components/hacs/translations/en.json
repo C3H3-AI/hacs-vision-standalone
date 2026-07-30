@@ -49,7 +49,7 @@
                     "appdaemon": "Enable AppDaemon apps discovery & tracking",
                     "sidepanel_icon": "Side panel icon",
                     "sidepanel_title": "Side panel title",
-                    "use_classic_ui": "Use the classic HACS interface (turn off to use the Vision interface). Restart or reload after changing."
+                    "panel_mode": "Interface mode (Vision / classic HACS / both). Reload the integration after changing."
                 }
             }
         }

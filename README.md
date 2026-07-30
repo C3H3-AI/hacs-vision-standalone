@@ -3,7 +3,7 @@
 > **📦 这是 HACS 与 HACS Vision 的合并版（hacs-vision-standalone）。**
 > 内置 HACS Vision 面板，集成 domain 仍为 `hacs`。安装即用，无需再单独安装独立的 HACS Vision 集成。
 >
-> **当前版本：7.0** ｜ 自我更新源：`C3H3-AI/hacs-vision-standalone`（跟本仓库，不跟官方 hacs）
+> **当前版本：7.1.0** ｜ 自我更新源：`C3H3-AI/hacs-vision-standalone`（跟本仓库，不跟官方 hacs）
 
 _Manage (Install, track, upgrade) and discover custom elements for Home Assistant directly from the UI._
 
