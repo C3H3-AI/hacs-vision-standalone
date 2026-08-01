@@ -52,6 +52,14 @@ class GitHubAuthMixin:
             return hacs_token
         return await self._get_vision_github_token()
 
+    async def _get_github_headers(self) -> dict[str, str]:
+        """Build GitHub API headers with the active token."""
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        token = await self._get_active_github_token()
+        if token:
+            headers["Authorization"] = f"token {token}"
+        return headers
+
     # ── Generic GitHub API caller ───────────────────────
 
     async def _github_api(self, method: str, path: str, body: dict | None = None) -> dict:

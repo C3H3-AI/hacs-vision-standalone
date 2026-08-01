@@ -48,6 +48,7 @@ class BrowseView extends LitElement {
     configEntries: { type: Object },
     pendingRestart: { type: Number },
     _selectedRepos: { type: Array, state: true },
+    refreshing: { type: Boolean },
     _tagFilters: { type: Array, state: true },
     _starredMap: { type: Object, state: true },
     // Org repos for add repo form
@@ -895,11 +896,15 @@ class BrowseView extends LitElement {
     this._load();
   }
   async _refresh() {
+    this.refreshing = true;
     this.page = 1;
     this._persistState();
-    // Force clear star cache + re-sync favorites from GitHub
-    try { await api.post('refresh', {}); } catch(e) { /* non-critical */ }
-    this._load();
+    try {
+      // Force clear star cache + re-sync favorites from GitHub
+      await api.refresh();
+    } catch(e) { /* non-critical */ }
+    await this._load();
+    this.refreshing = false;
   }
 
   async _quickAddFromSearch() {
@@ -1318,7 +1323,7 @@ class BrowseView extends LitElement {
           ${this.search ? html`<button class="search-clear" @click=${this._clearSearch}>✕</button>` : ''}
         </div>
         <div class="controls-right">
-          <button class="refresh-btn" @click=${this._refresh} title="${t('refreshTitle')}">
+          <button class="refresh-btn ${this.refreshing ? 'spinning' : ''}" @click=${this._refresh} ?disabled=${this.refreshing} title="${t('refreshTitle')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
             </svg>

@@ -557,10 +557,8 @@ class HACSOpsMixin:
 
         session = await self._get_session()
         url = f"https://api.github.com/repos/{full_name}/readme"
-        headers = {"Accept": "application/vnd.github.v3.html"}
-        token = await self._get_vision_github_token()
-        if token:
-            headers["Authorization"] = f"token {token}"
+        headers = await self._get_github_headers()
+        headers["Accept"] = "application/vnd.github.v3.html"
         try:
             async with session.get(url, headers=headers) as resp:
                 remaining = resp.headers.get("X-RateLimit-Remaining")
@@ -593,10 +591,7 @@ class HACSOpsMixin:
             url = f"https://api.github.com/repos/{full_name}/releases/tags/{tag}"
         else:
             url = f"https://api.github.com/repos/{full_name}/releases/latest"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        token = await self._get_vision_github_token()
-        if token:
-            headers["Authorization"] = f"token {token}"
+        headers = await self._get_github_headers()
         try:
             async with session.get(url, headers=headers) as resp:
                 remaining = resp.headers.get("X-RateLimit-Remaining")
@@ -630,10 +625,7 @@ class HACSOpsMixin:
                 try:
                     session = await self._get_session()
                     url = f"https://api.github.com/repos/{repo.data.full_name}/releases?per_page=20"
-                    gh_headers = {"Accept": "application/vnd.github.v3+json"}
-                    token = await self._get_vision_github_token()
-                    if token:
-                        gh_headers["Authorization"] = f"token {token}"
+                    gh_headers = await self._get_github_headers()
                     async with session.get(url, headers=gh_headers) as resp:
                         if resp.status == 200:
                             data = await resp.json()

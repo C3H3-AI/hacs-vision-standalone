@@ -9,6 +9,7 @@ class IntegrationsList extends LitElement {
     hass: { type: Object },
     configEntries: { type: Array },
     loading: { type: Boolean },
+    refreshing: { type: Boolean },
     searchText: { type: String },
     _statusFilter: { type: String, state: true },
     _showAddDialog: { type: Boolean, state: true },
@@ -874,7 +875,7 @@ class IntegrationsList extends LitElement {
             ${this.searchText ? html`<button class="search-clear" @click=${() => { this.searchText = ''; }}>✕</button>` : ''}
           </div>
           <div class="controls-right">
-            <button class="refresh-btn" @click=${this._load} title="${t('refresh')}" style="width:36px;height:36px;padding:8px;border:1px solid var(--divider-color);border-radius:10px;background:var(--card-background-color);color:var(--primary-text-color);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <button class="refresh-btn ${this.refreshing ? 'spinning' : ''}" @click=${() => { this.refreshing = true; this._load().finally(() => this.refreshing = false); }} title="${t('refresh')}" style="width:36px;height:36px;padding:8px;border:1px solid var(--divider-color);border-radius:10px;background:var(--card-background-color);color:var(--primary-text-color);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </button>
             <button class="view-toggle-btn" @click=${() => this._setViewMode(this._viewMode === 'card' ? 'list' : 'card')} title="${this._viewMode === 'card' ? t('viewList') : t('viewCard')}">

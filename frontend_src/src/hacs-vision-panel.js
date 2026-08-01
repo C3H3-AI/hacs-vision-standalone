@@ -1367,7 +1367,10 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
     if (!repoId || !version) return;
     this._installingVersion = true;
     try {
-      await api.installVersion(repoId, version);
+      const result = await api.installVersion(repoId, version);
+      if (!result?.success) {
+        throw new Error(result?.error || t('installFailed'));
+      }
       showToast(`${t('installComplete')}: ${version}`, 'success');
       this.dispatchEvent(new CustomEvent('refresh-stats', { bubbles: true, composed: true }));
       this._closeDetail();

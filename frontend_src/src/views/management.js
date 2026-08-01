@@ -23,6 +23,7 @@ export class ManagementView extends LitElement {
     ignoredRepos: { type: Array },
     renamedEntries: { type: Array },
     loading: { type: Boolean },
+    refreshing: { type: Boolean },
     erLoading: { type: Boolean },
     iLoading: { type: Boolean },
     importing: { type: Boolean },
@@ -1189,7 +1190,7 @@ export class ManagementView extends LitElement {
           ${this._customRepoSearch ? html`<button class="search-clear" @click=${() => { this._customRepoSearch = ''; this._orgRepos = []; this.requestUpdate(); }}>✕</button>` : ''}
         </div>
         <div class="controls-right">
-          <button class="refresh-btn" @click=${() => this._load()} title="${t('refreshTitle')}">
+          <button class="refresh-btn ${this.refreshing ? 'spinning' : ''}" @click=${() => { this.refreshing = true; this._load().finally(() => this.refreshing = false); }} title="${t('refreshTitle')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           </button>
           <button class="view-toggle-btn" @click=${() => this._setViewMode(_viewMode === 'card' ? 'list' : 'card')} title="${_viewMode === 'card' ? t('viewList') : t('viewCard')}">

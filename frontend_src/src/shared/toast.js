@@ -15,7 +15,23 @@ export function showToast(msg, type = 'info') {
     if (!panel) panel = candidates[0];
   } catch(e) { /* ignore */ }
   const container = panel?.shadowRoot?.querySelector('#toast-container');
-  if (!container) { console.warn('Toast container not found:', msg); return; }
+  if (!container) {
+    // Fallback: try HA's built-in notification system
+    try {
+      const hass = panel?.hass || document.querySelector('home-assistant')?.hass;
+      if (hass?.callService) {
+        hass.callService('persistent_notification', 'create', {
+          title: `HACS Vision - ${type === 'error' ? '错误' : '提示'}`,
+          message: msg,
+          notification_id: `hacs_vision_toast_${Date.now()}`,
+        });
+        return;
+      }
+    } catch(e) { /* ignore */ }
+    // Last resort: console
+    console.warn('Toast container not found:', msg);
+    return;
+  }
 
   _toastQueue.push({ msg, type });
   if (!_toastShowing) _showNextToast(container);
