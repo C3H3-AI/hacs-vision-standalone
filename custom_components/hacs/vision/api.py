@@ -386,7 +386,7 @@ class HACSBrandIconView(HomeAssistantView):
 
     url = "/api/hacs_vision_brand/{domain:.*}"
     name = "api:hacs_vision_brand"
-    requires_auth = True  # H1: require authentication to prevent unauthenticated file enumeration
+    requires_auth = False  # img tag loads from browser, cannot send auth headers
 
     def __init__(self, hass):
         self.hass = hass
