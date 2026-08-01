@@ -23,6 +23,17 @@ export function getCommonStyles() {
     --fs-2xl: 20px;
   }
 
+  /* ===== Smooth Scrollbar ===== */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--divider-color, #d0d0d0);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-text-color, #999);
+  }
+
   /* ===== Loading ===== */
   .loading {
     text-align: center; padding: 60px 20px;
@@ -49,6 +60,17 @@ export function getCommonStyles() {
     to { transform: rotate(360deg); }
   }
 
+  /* ===== Fade In Animation ===== */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   /* ===== Mini Icon (inline SVG helper) ===== */
   .mini-icon { width: 14px; height: 14px; vertical-align: -2px; display: inline; flex-shrink: 0; }
   .mini-icon.spin { animation: spin 1s linear infinite; }
@@ -57,6 +79,7 @@ export function getCommonStyles() {
   .empty {
     text-align: center; padding: 60px 20px;
     color: var(--secondary-text-color, #727272);
+    animation: fadeIn 0.4s ease;
   }
   .empty svg { width: 60px; height: 60px; margin-bottom: 16px; opacity: 0.3; }
   .empty-icon { font-size: 48px; margin-bottom: 12px; }
@@ -79,15 +102,17 @@ export function getCommonStyles() {
     background: var(--card-background-color, #fff);
     color: var(--primary-text-color, #212121);
     cursor: pointer; font-size: 12px;
-    transition: all 0.2s; white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); white-space: nowrap;
     touch-action: manipulation;
+    user-select: none;
   }
-  .btn:hover { border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); }
+  .btn:hover { border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .btn:active { transform: translateY(0); }
   .btn.primary { background: var(--primary-color, #03a9f4); border-color: var(--primary-color, #03a9f4); color: #fff; }
-  .btn.primary:hover { opacity: 0.9; }
+  .btn.primary:hover { opacity: 0.92; box-shadow: 0 2px 12px rgba(3, 169, 244, 0.3); }
   .btn.danger { color: var(--error-color, #f44336); border-color: var(--error-color, #f44336); }
   .btn.danger:hover { background: var(--error-color, #f44336); color: #fff; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
   /* ===== Icon Buttons (refresh, view-toggle, filter-toggle) ===== */
   .icon-btn {
@@ -96,9 +121,10 @@ export function getCommonStyles() {
     background: var(--card-background-color, #fff);
     color: var(--secondary-text-color, #727272);
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s; touch-action: manipulation;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); touch-action: manipulation;
   }
-  .icon-btn:hover { border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); }
+  .icon-btn:hover { border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); transform: scale(1.05); }
+  .icon-btn:active { transform: scale(0.95); }
   .icon-btn svg { width: 16px; height: 16px; }
 
   /* ===== Search ===== */
@@ -109,14 +135,19 @@ export function getCommonStyles() {
     border-radius: 10px; font-size: 14px;
     background: var(--card-background-color, #fff);
     color: var(--primary-text-color, #212121);
-    outline: none; transition: border-color 0.2s;
+    outline: none; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .search input:focus { border-color: var(--primary-color, #03a9f4); }
+  .search input:focus {
+    border-color: var(--primary-color, #03a9f4);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
+  }
   .search input::placeholder { color: var(--secondary-text-color, #727272); }
   .search-icon {
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
     width: 16px; height: 16px; color: var(--secondary-text-color, #727272);
+    transition: color 0.2s;
   }
+  .search:focus-within .search-icon { color: var(--primary-color, #03a9f4); }
   .search-clear {
     position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
     width: 20px; height: 20px; border-radius: 50%; border: none;
@@ -216,6 +247,11 @@ export function getCommonStyles() {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 13px; color: var(--secondary-text-color);
     cursor: pointer; flex-shrink: 0; white-space: nowrap; min-height: 36px;
+  }
+
+  /* ===== Refresh button spinning state ===== */
+  .refresh-btn.spinning svg {
+    animation: spin 1s linear infinite;
   }
 `;
 }

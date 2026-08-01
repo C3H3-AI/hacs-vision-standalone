@@ -1,5 +1,6 @@
 /**
  * Theme mixin that reads HA CSS variables for consistent theming.
+ * Applies derived colors, surface shades, and shadow variables.
  * Apply this mixin to LitElement components to get theme-aware styling.
  */
 export const themeMixin = (superClass) => class extends superClass {
@@ -87,20 +88,55 @@ export const themeMixin = (superClass) => class extends superClass {
       '--ha-card-border-radius': '12px',
     };
 
+    // Read each variable from HA, fallback to our defaults
     for (const [name, fallback] of Object.entries(defaults)) {
       const val = this._getHAVar(name);
       root.style.setProperty(name, val || fallback);
-      if (name === '--primary-color' && !val) {
-        // Compute rgb-primary-color from primary-color
-        const rgb = this._hexToRgb(fallback);
-        if (rgb) root.style.setProperty('--rgb-primary-color', rgb);
-      }
     }
 
-    // Compute rgb-primary-color from primary-color if not set
-    const primaryColor = root.style.getPropertyValue('--primary-color').trim() || defaults['--primary-color'];
+    // Compute derived colors once HA vars are set
+    this._applyDerivedColors(root, isDark);
+  }
+
+  _applyDerivedColors(root, isDark) {
+    // 1. rgb-primary-color from primary-color
+    const primaryColor = root.style.getPropertyValue('--primary-color').trim() || '#03a9f4';
     const rgbVal = this._getHAVar('--rgb-primary-color') || this._hexToRgb(primaryColor) || '3, 169, 244';
     root.style.setProperty('--rgb-primary-color', rgbVal);
+
+    // 2. Primary-color lighter variant (for hover backgrounds, badges)
+    const lighter = this._lightenColor(primaryColor, isDark ? 15 : 40);
+    root.style.setProperty('--primary-color-lighter', lighter);
+
+    // 3. Primary-color darker variant (for active states)
+    const darker = this._darkenColor(primaryColor, isDark ? 20 : 15);
+    root.style.setProperty('--primary-color-darker', darker);
+
+    // 4. Surface overlay color (for modals, hover overlays)
+    root.style.setProperty('--overlay-color', isDark ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.45)');
+
+    // 5. Shadow colors
+    const shadowColor = isDark ? '0,0,0' : rgbVal;
+    root.style.setProperty('--shadow-color', shadowColor);
+
+    // 6. Card surface elevation colors
+    const cardBg = root.style.getPropertyValue('--card-background-color').trim() || (isDark ? '#1c1c1c' : '#ffffff');
+    const elevatedBg = this._lightenColor(cardBg, isDark ? 8 : 0);
+    root.style.setProperty('--card-background-color-elevated', elevatedBg);
+
+    // 7. Input background color (if not set by HA)
+    const inputBg = this._getHAVar('--input-background-color');
+    if (!inputBg) {
+      root.style.setProperty('--input-background-color', isDark ? '#2a2a2a' : '#f0f0f0');
+    }
+
+    // 8. Success / error / warning derived from primary if not set
+    const successColor = this._getHAVar('--success-color');
+    if (!successColor) root.style.setProperty('--success-color', '#4caf50');
+    const errorColor = this._getHAVar('--error-color');
+    if (!errorColor) root.style.setProperty('--error-color', '#f44336');
+    const warningColor = this._getHAVar('--warning-color');
+    if (!warningColor) root.style.setProperty('--warning-color', '#ff9800');
   }
 
   _isDarkMode() {
@@ -126,6 +162,38 @@ export const themeMixin = (superClass) => class extends superClass {
     } catch(e) { /* ignore */ }
     // Priority 4: System preference
     try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch(e) { return false; }
+  }
+
+  /** Lighten a hex color by a percentage amount (0-100) */
+  _lightenColor(hex, amount) {
+    try {
+      hex = hex.replace(/^#/, '');
+      if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      if (hex.length !== 6) return hex;
+      let r = parseInt(hex.substring(0,2), 16);
+      let g = parseInt(hex.substring(2,4), 16);
+      let b = parseInt(hex.substring(4,6), 16);
+      r = Math.min(255, r + Math.round((255 - r) * amount / 100));
+      g = Math.min(255, g + Math.round((255 - g) * amount / 100));
+      b = Math.min(255, b + Math.round((255 - b) * amount / 100));
+      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+    } catch(e) { return hex; }
+  }
+
+  /** Darken a hex color by a percentage amount (0-100) */
+  _darkenColor(hex, amount) {
+    try {
+      hex = hex.replace(/^#/, '');
+      if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      if (hex.length !== 6) return hex;
+      let r = parseInt(hex.substring(0,2), 16);
+      let g = parseInt(hex.substring(2,4), 16);
+      let b = parseInt(hex.substring(4,6), 16);
+      r = Math.max(0, r - Math.round(r * amount / 100));
+      g = Math.max(0, g - Math.round(g * amount / 100));
+      b = Math.max(0, b - Math.round(b * amount / 100));
+      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+    } catch(e) { return hex; }
   }
 
   _parseColor(str) {
@@ -172,9 +240,14 @@ export const themeMixin = (superClass) => class extends superClass {
           if (this._themeObserver?._debounce) return;
           this._themeObserver._debounce = true;
           this._cssSource = null; // invalidate cache on theme change
-          setTimeout(() => { if (this._themeObserver) this._themeObserver._debounce = false; this._applyTheme(); }, 200);
+          setTimeout(() => {
+            if (this._themeObserver) {
+              this._themeObserver._debounce = false;
+            }
+            this._applyTheme();
+          }, 200);
         });
-        this._themeObserver.observe(target, { attributes: true, attributeFilter: ['class', 'style'] });
+        this._themeObserver.observe(target, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
       }
     } catch(e) { /* ignore */ }
   }

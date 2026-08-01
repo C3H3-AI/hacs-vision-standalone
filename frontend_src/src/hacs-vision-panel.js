@@ -176,8 +176,12 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
     .header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 12px; padding: 14px 20px;
-      background: linear-gradient(135deg, rgba(var(--rgb-primary-color, 3,169,244), 0.08) 0%, rgba(var(--rgb-primary-color, 3,169,244), 0.03) 100%);
-      border-radius: 16px; border: 1px solid var(--divider-color, #e0e0e0);
+      background: linear-gradient(135deg,
+        rgba(var(--rgb-primary-color, 3,169,244), 0.1) 0%,
+        rgba(var(--rgb-primary-color, 3,169,244), 0.03) 100%);
+      border-radius: 16px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      box-shadow: 0 1px 4px rgba(var(--shadow-color, 0,0,0), 0.04);
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
     .header-icon {
@@ -214,6 +218,7 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       padding: 10px 14px; margin: 0 0 6px;
       background: rgba(244,67,54,0.08); border: 1px solid rgba(244,67,54,0.25);
       border-radius: 10px; font-size: 13px;
+      box-shadow: 0 1px 3px rgba(var(--shadow-color, 0,0,0), 0.04);
     }
     .restart-bar span { font-weight: 600; color: #f44336; flex: 1; }
     .restart-bar-btn {
@@ -255,15 +260,18 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       padding: 10px 18px; border-radius: 10px 10px 0 0;
       background: transparent; border: none;
       color: var(--secondary-text-color, #727272); cursor: pointer;
-      font-size: 13px; font-weight: 500; transition: all 0.2s;
+      font-size: 13px; font-weight: 500;
+      transition: color 0.2s ease, background 0.2s ease;
       white-space: nowrap; position: relative;
       touch-action: manipulation;
     }
-    .tab:hover { color: var(--primary-color, #03a9f4); background: rgba(var(--rgb-primary-color, 3,169,244), 0.05); }
+    .tab:hover { color: var(--primary-color, #03a9f4); background: rgba(var(--rgb-primary-color, 3,169,244), 0.06); }
     .tab.active { color: var(--primary-color, #03a9f4); font-weight: 600; }
     .tab.active::after {
       content: ''; position: absolute; bottom: -1px; left: 10px; right: 10px;
-      height: 2px; background: var(--primary-color, #03a9f4); border-radius: 2px;
+      height: 2.5px; background: var(--primary-color, #03a9f4);
+      border-radius: 2px 2px 0 0;
+      transition: left 0.2s ease, right 0.2s ease;
     }
     .tab .badge {
       display: inline-flex; align-items: center; justify-content: center;
@@ -305,11 +313,12 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
     .toast {
       background: var(--primary-color, #03a9f4); color: #fff;
       padding: 14px 26px; border-radius: 12px; font-size: 14px; font-weight: 500;
-      opacity: 0; transform: translateY(20px);
-      transition: all 0.35s; text-align: center;
+      opacity: 0; transform: translateY(20px) scale(0.96);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1); text-align: center;
       pointer-events: auto;
+      box-shadow: 0 8px 24px rgba(var(--shadow-color, 0,0,0), 0.15);
     }
-    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.show { opacity: 1; transform: translateY(0) scale(1); }
     .toast.success { background: var(--success-color, #4caf50); }
     .toast.error { background: var(--error-color, #f44336); }
     .toast.info { background: var(--primary-color, #03a9f4); }
@@ -330,10 +339,11 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
     /* ===== Detail Modal ===== */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); z-index: 9999;
+      background: var(--overlay-color, rgba(0,0,0,0.6)); z-index: 9999;
       display: flex; align-items: center; justify-content: center;
       padding: 20px; box-sizing: border-box;
       animation: fadeIn 0.2s ease;
+      backdrop-filter: blur(2px);
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -342,8 +352,8 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       border-radius: 16px; width: 100%; max-width: 720px;
       max-height: 90vh; min-width: 360px; min-height: 300px;
       display: flex; flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      animation: slideUp 0.25s ease;
+      box-shadow: 0 20px 60px rgba(var(--shadow-color, 0,0,0), 0.3);
+      animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative; overflow: hidden;
       resize: both;
     }
@@ -665,7 +675,7 @@ export class HacsVisionPanel extends themeMixin(LitElement) {
       .chip { font-size: 11px; padding: 5px 10px; }
 
       /* Mobile modal: fullscreen */
-      .modal-overlay { padding: 0; align-items: flex-end; }
+      .modal-overlay { padding: 0; align-items: flex-end; backdrop-filter: none; }
       .modal {
         max-width: 100%; max-height: 92vh; border-radius: 16px 16px 0 0;
         resize: none;

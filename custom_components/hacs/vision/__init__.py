@@ -17,7 +17,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers import config_validation as cv
 from aiohttp import web
 
-from .const import DOMAIN, PANEL_ICON, VERSION
+from .const import DOMAIN, PANEL_ICON, PANEL_TITLE, VERSION
 from ..const import CONF_PANEL_MODE, DEFAULT_PANEL_MODE, PANEL_MODE_BOTH
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
@@ -30,7 +30,6 @@ CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 # the native `hacs` panel URL, so it stays compatible with HA's auth injection on
 # mobile/incognito clients (occupying `hacs` caused blank panels there).
 URL_PATH = "hacs-vision"
-PANEL_TITLE = "HACS"
 STORE_KEY = "hacs_vision"
 # Merged integration domain — used for service registration. The old "hacs_vision"
 # domain no longer exists after the fork-merge, so services are registered under
@@ -62,6 +61,23 @@ async def async_setup_vision(
     hass.http.register_view(api_view)
     hass.http.register_view(HACSBrandIconView(hass))
     await _register_panel(hass)
+
+    # Register the custom `hacs:hacs` icon set so the Vision sidebar entry and
+    # in-app header icon render. Vision mode does not call `async_register_frontend`
+    # (which normally registers iconset.js but also pulls in the classic-only
+    # `hacs_frontend` wheel), so we register the icon set here directly — without
+    # importing frontend.py — to avoid the unrelated `hacs_frontend` ImportError.
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+        from ..utils.workarounds import async_register_static_path
+        from ..const import URL_BASE
+
+        await async_register_static_path(
+            hass, f"{URL_BASE}/iconset.js", str(hacs.integration_dir / "iconset.js")
+        )
+        add_extra_js_url(hass, f"{URL_BASE}/iconset.js")
+    except Exception as exc:
+        _LOGGER.warning("Icon set registration skipped (non-critical): %s", exc)
 
     # Hide the original `hacs` sidebar entry unless panel_mode == "both".
     # (Replaces the old `hide_hacs_panel` Vision-settings toggle — the single

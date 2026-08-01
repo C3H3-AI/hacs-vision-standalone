@@ -49,33 +49,62 @@ class RepoCard extends LitElement {
   }
 
   static styles = css`
-    :host { display: block; touch-action: manipulation; }
+    :host {
+      display: block; touch-action: manipulation;
+      animation: cardFadeIn 0.35s ease both;
+    }
+    @keyframes cardFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     .card {
       background: var(--card-background-color, #fff);
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 14px; overflow: hidden;
-      transition: border-color 0.2s, box-shadow 0.2s; cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
       box-sizing: border-box;
       display: flex; flex-direction: column;
       position: relative; min-height: 290px;
+      box-shadow: 0 1px 3px rgba(var(--shadow-color, 0,0,0), 0.06);
     }
     .card.custom-repo {
       border-left: 3px solid #ff6f00;
     }
-    .card:hover { border-color: var(--primary-color, #03a9f4); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .card:hover {
+      border-color: var(--primary-color, #03a9f4);
+      box-shadow: 0 8px 24px rgba(var(--shadow-color, 0,0,0), 0.1);
+      transform: translateY(-2px);
+    }
+    .card:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(var(--shadow-color, 0,0,0), 0.08);
+    }
 
     .img-container {
       height: 120px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--secondary-background-color, #f0f0f0) 0%, var(--card-background-color, #fff) 100%);
+      background: linear-gradient(160deg,
+        var(--secondary-background-color, #f0f0f0) 0%,
+        var(--card-background-color, #fff) 60%);
       position: relative;
+      overflow: hidden;
+    }
+    .img-container::after {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(var(--rgb-primary-color, 3,169,244), 0.04) 0%, transparent 70%);
+      pointer-events: none;
     }
     .avatar {
       width: 52px; height: 52px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-size: 24px; font-weight: 700; color: #fff;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
       overflow: hidden; background: transparent;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover .avatar {
+      transform: scale(1.04);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.22);
     }
     .avatar img { width: 100%; height: 100%; object-fit: cover; }
     .avatar .initials {
@@ -144,11 +173,15 @@ class RepoCard extends LitElement {
       width: 32px; height: 32px; border-radius: 50%;
       border: none; background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: transform 0.15s;
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
     }
-    .star-fav-btn:hover { transform: scale(1.15); }
+    .star-fav-btn:hover {
+      transform: scale(1.18);
+      box-shadow: 0 0 16px rgba(255, 152, 0, 0.3);
+    }
     .star-fav-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .star-fav-btn svg { width: 18px; height: 18px; transition: all 0.2s; }
+    .star-fav-btn svg { width: 18px; height: 18px; transition: all 0.25s; }
     .star-fav-btn.starred svg { fill: var(--warning-color,#ff9800); color: var(--warning-color,#ff9800); }
     .star-fav-btn:not(.starred) svg { fill: none; color: #fff; }
 
