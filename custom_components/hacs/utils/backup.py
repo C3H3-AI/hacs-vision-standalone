@@ -78,7 +78,10 @@ class Backup:
         except (
             BaseException  # lgtm [py/catch-base-exception] pylint: disable=broad-except
         ) as exception:
-            self.hacs.log.warning("Could not create backup: %s", exception)
+            self.hacs.log.warning(
+                "Could not create backup for %s — old directory may not be deleted: %s",
+                self.local_path, exception,
+            )
 
     def restore(self) -> None:
         """Restore from backup."""

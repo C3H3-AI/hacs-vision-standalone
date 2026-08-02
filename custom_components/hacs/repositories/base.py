@@ -592,6 +592,13 @@ class HacsRepository:
             result = await self.hacs.async_save_file(temp_file, filecontent)
 
             def _extract_zip_file():
+                # Ensure target directory is clean before extraction.
+                # backup.create() may have failed silently, leaving stale files.
+                if os.path.exists(self.content.path.local):
+                    shutil.rmtree(self.content.path.local)
+                    while os.path.exists(self.content.path.local):
+                        sleep(0.1)
+                os.makedirs(self.content.path.local, exist_ok=True)
                 with zipfile.ZipFile(temp_file, "r") as zip_file:
                     zip_file.extractall(self.content.path.local)
 
@@ -678,6 +685,13 @@ class HacsRepository:
             raise HacsException("Could not save ZIP file")
 
         def _extract_zip_file():
+            # Ensure target directory is clean before extraction.
+            # backup.create() may have failed silently, leaving stale files.
+            if os.path.exists(self.content.path.local):
+                shutil.rmtree(self.content.path.local)
+                while os.path.exists(self.content.path.local):
+                    sleep(0.1)
+            os.makedirs(self.content.path.local, exist_ok=True)
             with zipfile.ZipFile(temp_file, "r") as zip_file:
                 extractable = []
                 for path in zip_file.filelist:
