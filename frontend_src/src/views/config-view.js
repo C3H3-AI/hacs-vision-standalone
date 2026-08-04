@@ -1328,13 +1328,7 @@ class ConfigView extends LitElement {
 
   async _autoStar() {
     try {
-      const result = await api.autoStarRepo();
-      
-      if (result?.already_starred) {
-        showToast(t('alreadyStarred'), 'info');
-      } else if (result?.ok) {
-        showToast(t('starSuccess', { repo: 'C3H3-AI/hacs-vision' }), 'success');
-      }
+      await api.autoStarRepo();
     } catch(e) {
       // Silent — non-critical
     }
